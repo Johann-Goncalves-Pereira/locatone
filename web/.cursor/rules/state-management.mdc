@@ -1,0 +1,30 @@
+---
+description: State management conventions
+globs: **/*.{ts,tsx}
+alwaysApply: false
+---
+
+# State Management
+
+| Concern | Tool | Location |
+|---------|------|----------|
+| Server/async data | TanStack Query + Effect | `features/*/api/*.queries.ts` |
+| UI/client state | `@effect-atom/atom-react` | `features/*/atoms/*.atom.ts` |
+| URL state | TanStack Router search params | route files |
+
+## Patterns
+
+- Define API Effects with `Effect.gen` + `Schema.decodeUnknown`.
+- Bridge to Query with `runApiPromise` in `queryFn` (rethrows AbortError for cancel).
+- Use `Atom.make` + `Atom.keepAlive` for cross-component UI state.
+- Read/write atoms with `useAtomValue` / `useAtomSet`.
+
+## Anti-patterns
+
+- Storing server data in Atoms (use Query cache).
+- Storing URL/search state in Atoms (use route search params).
+- Global monolithic atom registry of unrelated domains.
+- Fetching inside components (use query hooks).
+- Duplicating Query data in local state.
+- Zustand or Zod for new code.
+- Putting filter/sort that belongs in the URL into a query key when `select` can derive it from a stable list key.

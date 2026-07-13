@@ -1,0 +1,32 @@
+{
+	"explorer.fileNesting.enabled": true,
+	"explorer.fileNesting.patterns": {
+		"*.ts": "${capture}.js",
+		"*.js": "${capture}.js.map, ${capture}.min.js, ${capture}.d.ts",
+		"*.jsx": "${capture}.js",
+		"*.tsx": "${capture}.module.scss, ${capture}.ts",
+		"package.json": "pnpm-lock.yaml, pnpm-workspace.yaml",
+		"tsconfig.json": "tsconfig.*.json, jsconfig.json",
+		"vite.config.ts": "*.config.js, *.config.ts, *.config.cjs, *.config.mjs, *.config.mts, components.json, index.*, vercel.json",
+		".gitignore": ".*ignore, .gitlab*, .env*",
+		"README.md": "*.md"
+	},
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "esbenp.prettier-vscode",
+	"prettier.preferLocal": true,
+	"editor.codeActionsOnSave": {
+		"source.fixAll.eslint": "explicit",
+		"source.fixAll.format": "explicit",
+		"source.fixAll": "explicit"
+	},
+	"[ignore]": {
+		"editor.defaultFormatter": null,
+		"editor.formatOnSave": false
+	},
+	"files.watcherExclude": {
+		"**/node_modules/**": true,
+		"**/.git/**": true,
+		"**/dist/**": true,
+		"**/build/**": true
+	}
+}

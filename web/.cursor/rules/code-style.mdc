@@ -1,0 +1,11 @@
+---
+description: Prettier and import ordering conventions
+alwaysApply: true
+---
+
+# Code Style
+
+- No semicolons, single quotes, tabs, 80 char width (Prettier).
+- Import order: React → third-party → `@app` → `@lib` → `@features` → other aliases → relative.
+- Tailwind classes sorted by `prettier-plugin-tailwindcss`.
+- Run `pnpm format` after large edits; pre-commit runs Prettier via lint-staged.

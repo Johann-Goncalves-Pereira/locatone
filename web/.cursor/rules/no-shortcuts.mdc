@@ -1,0 +1,39 @@
+---
+description: No shortcuts — make the right path easier than cheating checks
+alwaysApply: true
+---
+
+# No Shortcuts / Complete Work
+
+It must be easier to do the right thing than to bypass checks.
+
+## Forbidden escapes
+
+- `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`
+- `eslint-disable`, `eslint-disable-next-line`, `eslint-disable-line`
+- `any`, type assertions (`as Type`), non-null assertions (`!`)
+- Note: `as const` (const assertions) is allowed — e.g. query key factories
+- Skipping or disabling tests (`it.skip`, `describe.only`, etc.)
+- Leaving TODO/FIXME that encode unfinished work or tech debt
+- `--no-verify` on git hooks
+
+## Config files are locked
+
+Do **not** edit these to work around typing or lint errors:
+
+- `eslint.config.js`
+- `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`
+
+Only change them when the user **explicitly** asks (e.g. “change the eslint rules”, “relax tsconfig”). On type/lint failures: fix the application code, not the tooling.
+
+## Complete every task to 100%
+
+Before finishing any change:
+
+1. Types compile (`pnpm tsc`)
+2. Lint is clean (`pnpm lint`, `--max-warnings 0`)
+3. Tests pass (`pnpm test`) — add/update tests when behavior changes
+4. Docs and `.cursor/rules` updated if conventions changed
+5. `pnpm validate` is green
+
+If something cannot be finished now: **stop and ask** — do not ship partial work that accumulates debt.

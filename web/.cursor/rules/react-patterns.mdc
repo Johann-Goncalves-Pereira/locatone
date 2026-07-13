@@ -1,0 +1,15 @@
+---
+description: React component and hook patterns
+globs: **/*.tsx
+alwaysApply: false
+---
+
+# React Patterns
+
+- Functional components only. Named exports for shared components; default export only for pages.
+- Extract reusable logic into hooks (`useX`). Page orchestration hooks live in the feature.
+- `useState` for local UI state in a single component. Cross-component UI state → Effect Atom.
+- Server/async data → TanStack Query via `queryOptions()` in `*.queries.ts` (Effects in `queryFn`).
+- Atoms: `useAtomValue(atom)` / `useAtomSet(atom)` to limit re-renders.
+- Wrap the app with `RegistryProvider` (see `@app/providers`).
+- Follow React Compiler rules — ESLint enforces them.

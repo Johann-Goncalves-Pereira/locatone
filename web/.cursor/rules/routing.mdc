@@ -1,0 +1,13 @@
+---
+description: TanStack Router file-based routing conventions
+globs: src/routes/**
+alwaysApply: false
+---
+
+# Routing
+
+- File-based routes in `src/routes/` — thin wiring only, no business logic.
+- Export `Route` via `createFileRoute()` or `createRootRoute()`.
+- Page components live in `src/pages/` or are composed from `@features/*`.
+- `src/routeTree.gen.ts` is auto-generated — never edit manually.
+- URL/search state belongs in route search params, not Effect Atoms.

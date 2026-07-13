@@ -1,0 +1,11 @@
+{
+	"recommendations": [
+		"emeraldwalk.runonsave",
+		"cSpell.words",
+		"dbaeumer.vscode-eslint",
+		"esbenp.prettier-vscode",
+		"aaron-bond.better-comments",
+		"bradlc.vscode-tailwindcss"
+	],
+	"unwantedRecommendations": []
+}

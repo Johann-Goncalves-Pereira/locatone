@@ -1,0 +1,36 @@
+---
+description: Code identifiers must be English only
+alwaysApply: true
+---
+
+# English Identifiers
+
+All code naming must be English.
+
+## Must be English
+
+- Variables, constants, functions, classes, types, interfaces, props
+- File and folder names, feature names, route segments
+- Schema fields that are code identifiers (not user-facing copy)
+
+## Portuguese is allowed only in
+
+- UI strings / user-facing copy
+- Product comments aimed at end users (when the product is PT)
+- User-facing documentation
+
+## Examples
+
+```typescript
+// BAD
+const usuario = ...
+function buscarDados() {}
+type Pedido = ...
+// feature folder: src/features/pedidos
+
+// GOOD
+const user = ...
+function fetchData() {}
+type Order = ...
+// feature folder: src/features/orders
+```

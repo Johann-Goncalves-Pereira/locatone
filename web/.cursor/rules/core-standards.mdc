@@ -1,0 +1,19 @@
+---
+description: Core coding standards for the boilerplate
+alwaysApply: true
+---
+
+# Core Standards
+
+- Use path aliases (`@app`, `@features`, `@lib`, `@components`, `@pages`) — never `../` from routes, pages, app, or layout.
+- Keep `routes/` and `pages/` thin: wire UI only, no business logic.
+- Put domain logic in `src/features/<feature>/` with colocated api, atoms, hooks, and components.
+- Export feature public APIs from `src/features/<feature>/index.ts`.
+- Run `pnpm validate` before opening a PR. ESLint uses `--max-warnings 0`.
+- Never use `any`, `enum`, or type assertions (`as Type`). Prefer Effect Schema + `typeof Schema.Type`.
+- `as const` is allowed (const assertions); type assertions like `as Foo` are not.
+- Never duplicate types that can be inferred from schemas or `as const` + `satisfies`.
+- Stack: Effect (Schema + Effects + Atom) + TanStack (Router + Query). Do not introduce Zod or Zustand.
+- Follow `no-shortcuts.mdc`: no bypasses (`@ts-ignore`, `eslint-disable`, skipped tests); finish work 100% or ask — never leave tech debt.
+- Do not change `eslint.config.js` or `tsconfig*.json` to dodge errors unless the user explicitly asks.
+

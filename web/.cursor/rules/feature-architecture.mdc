@@ -1,0 +1,22 @@
+---
+description: Feature module architecture
+globs: src/features/**
+alwaysApply: false
+---
+
+# Feature Architecture
+
+```
+features/<name>/
+  api/          # schemas, api Effects, query keys, queries
+  atoms/        # Effect Atom UI state
+  components/   # feature UI
+  hooks/        # orchestration hooks
+  index.ts      # public API
+```
+
+- `*.schema.ts` — Effect Schema; export types via `typeof Schema.Type`.
+- `*.query-keys.ts` — query key factory with `as const`.
+- `*.queries.ts` — `queryOptions()` + hooks; `queryFn` uses `runApiPromise`.
+- `*.atom.ts` — UI atoms with `@effect-atom/atom-react` (not for URL/search state).
+- Do not import another feature's internals; use its `index.ts` or shared `@lib`.

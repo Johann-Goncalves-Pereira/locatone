@@ -1,0 +1,35 @@
+---
+description: TypeScript inference and Effect Schema-first typing
+globs: **/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript Inference
+
+## Single source of truth
+
+```typescript
+// BAD — duplicated shape
+interface User { id: string; name: string }
+
+// GOOD — schema first, type inferred
+const User = Schema.Struct({ id: Schema.String, name: Schema.String })
+type User = typeof User.Type
+```
+
+## Boundaries
+
+- Validate `import.meta.env` in `@lib/env.ts` with `Schema.decodeUnknownSync`.
+- Validate API responses in `@lib/api-client.ts` with `Schema.decodeUnknown` inside Effects.
+- Use `satisfies` for const maps; use `Schema.Literal` for string unions.
+
+## Forbidden
+
+- `any`, `enum`, type assertions (`as SomeType`), non-null assertions (`!`).
+- Interfaces that mirror an existing Effect Schema.
+- Zod (use `effect/Schema` instead).
+
+## Allowed
+
+- `as const` for const assertions (e.g. query key factories).
+- `satisfies` for narrowing without widening.
