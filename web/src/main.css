@@ -121,3 +121,7 @@ body {
 .leaflet-control-attribution a {
 	color: var(--loc-accent) !important;
 }
+
+.leaflet-bottom.leaflet-right {
+	display: none !important;
+}
