@@ -140,15 +140,15 @@ function MapLegend({ points }: { readonly points: readonly SignalMapPoint[] }) {
 	}
 
 	return (
-		<div className='pointer-events-none absolute bottom-3 left-3 z-[400] max-h-40 max-w-[min(100%,16rem)] overflow-y-auto rounded-lg border border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_88%,transparent)] px-2.5 py-2 backdrop-blur-md'>
+		<div className='pointer-events-auto absolute bottom-3 left-3 z-[400] max-w-[min(calc(100%-1.5rem),22rem)] rounded-lg border border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_88%,transparent)] px-2.5 py-2 backdrop-blur-md'>
 			<p className='mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--loc-muted)] uppercase'>
 				Métodos no mapa
 			</p>
-			<ul className='flex flex-col gap-1'>
+			<ul className='flex flex-wrap gap-x-3 gap-y-1.5'>
 				{entries.map(entry => (
 					<li
 						key={entry.id}
-						className='flex items-center gap-2 text-[11px] text-[var(--loc-ink)]'
+						className='flex items-center gap-1.5 text-[11px] text-[var(--loc-ink)]'
 					>
 						<span
 							className='size-2.5 shrink-0 rounded-full'
@@ -157,7 +157,7 @@ function MapLegend({ points }: { readonly points: readonly SignalMapPoint[] }) {
 						{shortProbeLabel(entry.id)}
 					</li>
 				))}
-				<li className='flex items-center gap-2 text-[11px] text-[var(--loc-ink)]'>
+				<li className='flex items-center gap-1.5 text-[11px] text-[var(--loc-ink)]'>
 					<span
 						className='size-2.5 shrink-0 rounded-full ring-2 ring-[var(--loc-ink)]/30'
 						style={{ backgroundColor: FUSED_COLOR }}

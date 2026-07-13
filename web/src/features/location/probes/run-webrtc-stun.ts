@@ -4,30 +4,14 @@ import { fetchIpWhoPromise } from '@features/location/api/ip.api'
 import type { LocationSignal } from '@features/location/api/location.schema'
 import { makeSignal } from '@features/location/probes/signal-helpers'
 
-function extractIpFromCandidate(candidate: string): string | undefined {
-	const patterns = [
-		/([0-9]{1,3}(?:\.[0-9]{1,3}){3})/,
-		/([a-f0-9:]+:+[a-f0-9:]+)/i,
-	]
-	for (const pattern of patterns) {
-		const match = pattern.exec(candidate)
-		const ip = match?.[1]
-		if (ip !== undefined && !ip.startsWith('0.') && ip !== '0.0.0.0') {
-			return ip
-		}
-	}
-	return undefined
+const IPV4_PATTERN =
+	/\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})\b/
+
+function isValidIpv4(ip: string): boolean {
+	return IPV4_PATTERN.test(ip) && IPV4_PATTERN.exec(ip)?.[0] === ip
 }
 
 function isPrivateIp(ip: string): boolean {
-	if (ip.includes(':')) {
-		return (
-			ip.startsWith('fc') ||
-			ip.startsWith('fd') ||
-			ip.startsWith('fe80') ||
-			ip === '::1'
-		)
-	}
 	return (
 		ip.startsWith('10.') ||
 		ip.startsWith('192.168.') ||
@@ -35,6 +19,34 @@ function isPrivateIp(ip: string): boolean {
 		ip.startsWith('127.') ||
 		ip.startsWith('169.254.')
 	)
+}
+
+/** Prefer RTCIceCandidate.address; fall back to a strict IPv4 match in the SDP line. */
+export function extractPublicIpv4(
+	address: string | null | undefined,
+	candidateLine: string,
+): string | undefined {
+	if (
+		typeof address === 'string' &&
+		isValidIpv4(address) &&
+		!isPrivateIp(address)
+	) {
+		return address
+	}
+
+	const match = IPV4_PATTERN.exec(candidateLine)
+	const ip = match?.[0]
+	if (ip !== undefined && !isPrivateIp(ip)) {
+		return ip
+	}
+
+	return undefined
+}
+
+function extractPublicIpv4FromIce(
+	candidate: RTCIceCandidate,
+): string | undefined {
+	return extractPublicIpv4(candidate.address, candidate.candidate)
 }
 
 export async function runWebRtcStunProbe(
@@ -85,10 +97,9 @@ export async function runWebRtcStunProbe(
 					resolve()
 					return
 				}
-				const raw = event.candidate.candidate
-				candidates.push(raw)
-				const ip = extractIpFromCandidate(raw)
-				if (ip !== undefined && !isPrivateIp(ip)) {
+				candidates.push(event.candidate.candidate)
+				const ip = extractPublicIpv4FromIce(event.candidate)
+				if (ip !== undefined) {
 					publicIps.add(ip)
 				}
 			}
@@ -107,9 +118,9 @@ export async function runWebRtcStunProbe(
 				id: 'webrtc_stun',
 				label,
 				status: 'ok',
-				confidence: 0.15,
+				confidence: 0,
 				summary:
-					'ICE concluído sem IP público (rede restrita ou IP mascarado).',
+					'ICE concluído sem IPv4 público válido (rede restrita ou mascarada).',
 				raw: { stunUrl, candidates, publicIps: ipList },
 			})
 		}
@@ -120,7 +131,7 @@ export async function runWebRtcStunProbe(
 				id: 'webrtc_stun',
 				label,
 				status: 'ok',
-				confidence: 0.15,
+				confidence: 0,
 				summary: 'Sem IP público útil.',
 				raw: { stunUrl, candidates, publicIps: ipList },
 			})
@@ -129,6 +140,22 @@ export async function runWebRtcStunProbe(
 		const geo = await fetchIpWhoPromise(primaryIp, signal)
 		const hasCoords =
 			geo.success && geo.latitude !== undefined && geo.longitude !== undefined
+
+		if (!geo.success) {
+			return makeSignal({
+				id: 'webrtc_stun',
+				label,
+				status: 'ok',
+				confidence: 0.2,
+				summary: `IP STUN ${primaryIp} (geo falhou: ${geo.message ?? 'desconhecido'}).`,
+				raw: {
+					stunUrl,
+					candidates,
+					publicIps: ipList,
+					geo,
+				},
+			})
+		}
 
 		return makeSignal({
 			id: 'webrtc_stun',

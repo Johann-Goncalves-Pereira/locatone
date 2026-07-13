@@ -3,6 +3,7 @@ import type {
 	ProbeId,
 } from '@features/location/api/location.schema'
 import { probeColor } from '@features/location/lib/probe-colors'
+import { signalBadgeLabel } from '@features/location/lib/signal-badge'
 
 interface SignalCardProps {
 	readonly signal: LocationSignal
@@ -10,19 +11,12 @@ interface SignalCardProps {
 	readonly onSelect: (id: ProbeId) => void
 }
 
-const STATUS_LABEL: Record<LocationSignal['status'], string> = {
-	ok: 'ok',
-	denied: 'negado',
-	unsupported: 'sem suporte',
-	error: 'erro',
-}
-
 const BLOCKED_COLOR = '#F43F5E'
 
 export function SignalCard({ signal, selected, onSelect }: SignalCardProps) {
-	const confidencePct = Math.round(signal.confidence * 100)
 	const blocked = signal.status === 'denied'
 	const color = blocked ? BLOCKED_COLOR : probeColor(signal.id)
+	const badge = signalBadgeLabel(signal)
 
 	return (
 		<button
@@ -67,11 +61,11 @@ export function SignalCard({ signal, selected, onSelect }: SignalCardProps) {
 					className='shrink-0 rounded-md bg-[var(--loc-bg)] px-2 py-1 font-mono text-[10px] tracking-wide uppercase'
 					style={{ color }}
 				>
-					{STATUS_LABEL[signal.status]} · {confidencePct}%
+					{badge}
 				</span>
 			</div>
 			{selected ? (
-				<pre className='mt-3 max-h-40 overflow-auto rounded-lg bg-[var(--loc-bg)] p-2 font-mono text-[10px] leading-relaxed text-[var(--loc-muted)]'>
+				<pre className='mt-3 max-h-56 overflow-y-auto overscroll-contain rounded-lg bg-[var(--loc-bg)] p-2 font-mono text-[10px] leading-relaxed text-[var(--loc-muted)]'>
 					{JSON.stringify(signal.raw, null, 2)}
 				</pre>
 			) : null}

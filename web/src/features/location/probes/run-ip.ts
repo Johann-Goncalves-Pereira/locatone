@@ -12,14 +12,29 @@ export async function runIpCloudflareProbe(
 	try {
 		const trace = await fetchCloudflareTracePromise(signal)
 		const country = trace.loc
+		const hasUseful =
+			(country !== undefined && country.length > 0) ||
+			(trace.ip !== undefined && trace.ip.length > 0)
+
+		if (!hasUseful) {
+			return makeSignal({
+				id: 'ip_cloudflare',
+				label,
+				status: 'error',
+				confidence: 0,
+				summary: 'Traço Cloudflare vazio ou bloqueado (sem IP/país).',
+				raw: { ...trace },
+			})
+		}
+
 		return makeSignal({
 			id: 'ip_cloudflare',
 			label,
 			status: 'ok',
-			confidence: country ? 0.55 : 0.3,
+			confidence: country ? 0.55 : 0.25,
 			summary: country
 				? `País pelo edge Cloudflare: ${country}${trace.colo ? ` (colo ${trace.colo})` : ''}.`
-				: 'Traço Cloudflare obtido sem código de país.',
+				: `IP Cloudflare: ${trace.ip ?? 'desconhecido'} (sem código de país).`,
 			regionHints: country
 				? { countryCodes: [country], countries: [country] }
 				: undefined,

@@ -40,7 +40,7 @@ export function ForensicsPanel({
 	return (
 		<section
 			className={`shrink-0 border-t border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_94%,transparent)] backdrop-blur-md ${
-				open ? 'max-h-[min(45vh,24rem)]' : 'max-h-14'
+				open ? 'max-h-[min(60vh,36rem)]' : 'max-h-14'
 			} flex flex-col overflow-hidden transition-[max-height] duration-500 ease-out`}
 		>
 			<button
