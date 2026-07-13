@@ -1,21 +1,21 @@
 import { getRouteApi } from '@tanstack/react-router'
 
-import { TodosPanel } from '@features/todos'
+import { LocationExplorer } from '@features/location'
 
 const routeApi = getRouteApi('/')
 
 function Home() {
-	const { filter } = routeApi.useSearch()
+	const { panel } = routeApi.useSearch()
 	const navigate = routeApi.useNavigate()
 
 	return (
-		<TodosPanel
-			filter={filter}
-			onFilterChange={nextFilter => {
+		<LocationExplorer
+			panel={panel}
+			onPanelChange={nextPanel => {
 				void navigate({
 					search: previous => ({
 						...previous,
-						filter: nextFilter,
+						panel: nextPanel,
 					}),
 				})
 			}}

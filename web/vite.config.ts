@@ -55,6 +55,10 @@ export default defineConfig(({ mode }) => {
 								name: 'effect',
 								test: /node_modules[/\\](?:effect|@effect-atom)[/\\]/,
 							},
+							{
+								name: 'leaflet',
+								test: /node_modules[/\\](?:leaflet|react-leaflet)[/\\]/,
+							},
 						],
 					},
 				},

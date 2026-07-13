@@ -1,32 +1,17 @@
-> **CRITICAL - FIRST RUN INSTRUCTION:** This repository is a new project
-> boilerplate. The user's very first prompt detailing what this application
-> should be must be fully executed. Upon receiving this first prompt, you must:
->
-> 1. Scaffolding the requested features using the boilerplate's existing stack.
-> 2. Automatically update the project name and package name across all native
->    and configuration files.
-> 3. Update the global documentation to accurately reflect the newly created
->    app.
-> 4. Completely remove this "FIRST RUN INSTRUCTION" block from the documentation
->    so subsequent interactions proceed normally.
+# Locatone
 
-# React Boilerplate (Effect + TanStack)
-
-React 19 + TypeScript starter with Effect Schema/Effects/Atom, TanStack Router +
-Query, quality-gated builds, and AI-enforced conventions. The included todos
-feature is a **read-only reference** (JSONPlaceholder GET + URL filter), not a
-full CRUD app. List density is a small Effect Atom demo for non-URL UI state.
+Forense de localização no navegador: coleta múltiplos sinais (GPS, rede, IP,
+WebRTC, Intl, latência e outros) e mostra um ponto fundido no mapa com um painel
+transparente de cada método.
 
 ## Stack
 
 - React 19 + TypeScript (strict + `noUncheckedIndexedAccess`)
-- Vite (`rolldown-vite`) + React Compiler (dev + production Vite builds; RC
-  plugin)
-- TanStack Router (file-based routes + generated route tree)
-- TanStack Query (server state cache)
-- Effect — Schema, Effects, and `@effect-atom/atom-react` (UI state)
+- Vite (`rolldown-vite`) + React Compiler
+- TanStack Router + TanStack Query
+- Effect — Schema, Effects, `@effect-atom/atom-react`
+- Leaflet + react-leaflet (mapa)
 - Tailwind CSS v4
-- ESLint strict type-checked + Prettier
 - Vitest + Testing Library
 
 ## Getting started
@@ -36,8 +21,9 @@ pnpm install
 pnpm dev
 ```
 
-Copy `.env.example` to `.env` if you need to override the API base URL. Only use
-the `VITE_` prefix for values that are safe to expose in the browser.
+Copy `.env.example` to `.env` to override STUN / IP lookup bases. Only use the
+`VITE_` prefix for values safe to expose in the browser. Locatone v1 is
+client-only and uses public APIs (Cloudflare trace, ipwho.is, public STUN).
 
 ## Scripts
 
@@ -63,23 +49,22 @@ src/
 ├── app/           # App bootstrap, providers, router
 ├── features/      # Domain modules (api, atoms, components, hooks)
 ├── components/    # Shared UI primitives
-├── lib/           # env validation, api client, query client
+├── lib/           # env validation, api client, external fetch, query client
 ├── layout/        # Root layout shell
 ├── pages/         # Thin page composition (owns route wiring)
 ├── routes/        # TanStack Router file routes (wiring only)
 └── test/          # Test utilities
 ```
 
-See `src/features/todos/` for a reference feature: Effect Schema → API Effect →
-Query options with a stable list key + `select` filter, `?filter=` search params
-owned by the page/route, and `listDensityAtom` for local UI state.
+See `src/features/location/` for the location forensics feature: Effect Schema
+signals → probe runners → fusion → map + forensics panel. Optional `?panel=`
+search param is owned by the page/route.
 
 ## Typing conventions
 
 - **Effect Schema first**: define schemas, infer types with `typeof Schema.Type`
 - **No duplication**: never create interfaces that mirror schemas
-- **Boundaries**: validate env and API responses at the edges; encode request
-  bodies with Schema for write helpers
+- **Boundaries**: validate env and API responses at the edges
 - **Forbidden**: `any`, `enum`, type assertions (`as Type`), Zod, Zustand
 - **Allowed**: `as const` (const assertions) and `satisfies`
 
@@ -91,8 +76,7 @@ owned by the page/route, and `listDensityAtom` for local UI state.
 | UI/client    | `@effect-atom/atom-react` (`*.atom.ts`) |
 | URL          | TanStack Router search params           |
 
-URL/search state belongs in route search params, not Effect Atoms. See
-`src/features/todos/atoms/todos-ui.atom.ts` for a non-URL Atom example.
+URL/search state belongs in route search params, not Effect Atoms.
 
 ## Quality philosophy
 
@@ -116,7 +100,7 @@ URL/search state belongs in route search params, not Effect Atoms. See
 ## Creating a new feature
 
 1. Create `src/features/<name>/api/<name>.schema.ts` with Effect Schema
-2. Add `api/<name>.api.ts` using `@lib/api-client` Effects
+2. Add `api/<name>.api.ts` using `@lib/api-client` or `@lib/external-fetch`
 3. Add `api/<name>.query-keys.ts` and `api/<name>.queries.ts`
 4. Add `atoms/<name>.atom.ts` for non-URL UI state if needed
 5. Build components and hooks; export public API from `index.ts`
@@ -129,18 +113,17 @@ URL/search state belongs in route search params, not Effect Atoms. See
 - `pnpm validate` = `tsc` + lint + Prettier check + tests
 - `pnpm build` also runs validate, then production build + **500 kB per JS
   chunk** budget (`pnpm check:bundle`)
-- Vendor libs are split via Rolldown `advancedChunks` (react / tanstack /
-  effect)
+- Vendor libs are split via Rolldown `advancedChunks` (react / tanstack / effect
+  / leaflet)
 - Husky pre-commit: lint-staged (Prettier + ESLint on staged files)
 - Husky pre-push: full `pnpm validate`
 - ESLint: `--max-warnings 0`, bans `@ts-*` comments, `eslint-disable`,
   focused/skipped tests, `enum`, TODO/FIXME comments, and Zod/Zustand imports
-- ESLint: `strictTypeChecked` rules
 - Generated `src/routeTree.gen.ts` is ESLint-ignored (TanStack codegen)
 
 ## Notes
 
 - Requires Node `^20.19 || ^22.12 || >=24` (see `package.json` `engines`).
 - Use Corepack so the pinned `packageManager` (pnpm) is respected.
-- `rolldown-vite` and `babel-plugin-react-compiler` are experimental/RC — expect
-  occasional churn.
+- Browsers do not expose Wi‑Fi vs cell triangulation separately; Locatone probes
+  GPS (high accuracy) and network/coarse geolocation and labels them honestly.

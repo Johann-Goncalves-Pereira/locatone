@@ -6,7 +6,16 @@ const Env = Schema.Struct({
 	PROD: Schema.Boolean,
 	SSR: Schema.Boolean,
 	VITE_API_BASE_URL: Schema.optionalWith(Schema.URL, {
-		default: () => new URL('https://jsonplaceholder.typicode.com'),
+		default: () => new URL('https://ipwho.is'),
+	}),
+	VITE_IPWHO_BASE: Schema.optionalWith(Schema.URL, {
+		default: () => new URL('https://ipwho.is/'),
+	}),
+	VITE_CLOUDFLARE_TRACE_URL: Schema.optionalWith(Schema.URL, {
+		default: () => new URL('https://www.cloudflare.com/cdn-cgi/trace'),
+	}),
+	VITE_STUN_URL: Schema.optionalWith(Schema.String, {
+		default: () => 'stun:stun.l.google.com:19302',
 	}),
 })
 
