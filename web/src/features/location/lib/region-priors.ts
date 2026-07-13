@@ -300,6 +300,59 @@ export function countryFromTld(hostname: string): string | undefined {
 	return GEO_TLDS[tld]
 }
 
+export type KeyboardLayoutId =
+	| 'azerty'
+	| 'qwertz'
+	| 'jis'
+	| 'qwerty'
+	| 'unknown'
+
+export function inferKeyboardLayout(
+	layoutMap: ReadonlyMap<string, string>,
+): KeyboardLayoutId {
+	const keyA = layoutMap.get('KeyA')?.toLowerCase()
+	const keyQ = layoutMap.get('KeyQ')?.toLowerCase()
+	const keyW = layoutMap.get('KeyW')?.toLowerCase()
+	const keyZ = layoutMap.get('KeyZ')?.toLowerCase()
+	const keyY = layoutMap.get('KeyY')?.toLowerCase()
+	const keyBracketLeft = layoutMap.get('BracketLeft')
+
+	if (keyA === 'q' && keyQ === 'a') {
+		return 'azerty'
+	}
+	if (keyY === 'z' && keyZ === 'y') {
+		return 'qwertz'
+	}
+	if (
+		keyBracketLeft === '@' ||
+		keyBracketLeft === '「' ||
+		keyZ === 'ー' ||
+		keyW === 'て'
+	) {
+		return 'jis'
+	}
+	if (keyQ === 'q' && keyW === 'w' && keyA === 'a') {
+		return 'qwerty'
+	}
+	return 'unknown'
+}
+
+const KEYBOARD_LAYOUT_COUNTRY: Readonly<
+	Record<KeyboardLayoutId, readonly string[]>
+> = {
+	azerty: ['FR', 'BE'],
+	qwertz: ['DE', 'AT', 'CH'],
+	jis: ['JP'],
+	qwerty: [],
+	unknown: [],
+}
+
+export function countriesFromKeyboardLayout(
+	layoutId: KeyboardLayoutId,
+): readonly string[] {
+	return KEYBOARD_LAYOUT_COUNTRY[layoutId]
+}
+
 export function countryCentroid(
 	countryCode: string,
 ): { readonly lat: number; readonly lng: number } | undefined {

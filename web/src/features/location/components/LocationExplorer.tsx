@@ -16,11 +16,13 @@ export function LocationExplorer({
 	const {
 		hasStarted,
 		isCollecting,
+		isError,
+		errorMessage,
 		signals,
 		fused,
-		selectedSignalId,
+		selectedSignalIds,
 		revealOrigin,
-		selectSignal,
+		toggleSignal,
 	} = useLocationForensics(panel)
 
 	const panelOpen = panel === 'open'
@@ -32,14 +34,16 @@ export function LocationExplorer({
 				<LocationMap
 					fused={fused}
 					signals={signals}
-					selectedSignalId={selectedSignalId}
+					selectedSignalIds={selectedSignalIds}
 					isCollecting={isCollecting}
 					panelOpen={panelOpen}
-					onSelectSignal={selectSignal}
+					onToggleSignal={toggleSignal}
 				/>
 				<LocationHero
 					hasStarted={hasStarted}
 					isCollecting={isCollecting}
+					isError={isError}
+					errorMessage={errorMessage}
 					onReveal={revealOrigin}
 					fusedSummary={fused?.summary}
 				/>
@@ -47,10 +51,13 @@ export function LocationExplorer({
 			<ForensicsPanel
 				open={panelOpen}
 				isCollecting={isCollecting}
+				isError={isError}
+				errorMessage={errorMessage}
 				signals={signals}
 				fused={fused}
-				selectedSignalId={selectedSignalId}
-				onSelectSignal={selectSignal}
+				selectedSignalIds={selectedSignalIds}
+				onToggleSignal={toggleSignal}
+				onRetry={revealOrigin}
 				onToggle={() => {
 					onPanelChange(panelOpen ? 'closed' : 'open')
 				}}

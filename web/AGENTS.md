@@ -12,10 +12,11 @@ Guia para agentes de AI trabalhando neste repositório.
 - Tailwind CSS v4
 - Vitest + Testing Library
 
-A feature `location` é o produto: forense multi-sinal (GPS, geo de rede, IP,
-WebRTC/STUN, Intl, RTT, fontes, bússola, conflitos) com fusão no mapa e painel
-de evidências. Densidade de UI local (painel selecionado, último GPS da sessão)
-usa Atom; `?panel=` fica na URL.
+A feature `location` é o produto: forense multi-sinal (GPS, geo de rede, IP
+Cloudflare/ipwho/geojs, WebRTC/STUN IPv4+IPv6, Intl, RTT, fontes, layout de
+teclado, bússola, conflitos) com fusão no mapa e painel de evidências. Densidade
+de UI local (painel selecionado, último GPS da sessão) usa Atom; `?panel=` fica
+na URL.
 
 ## Comandos
 

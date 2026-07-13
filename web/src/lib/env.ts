@@ -11,6 +11,9 @@ const Env = Schema.Struct({
 	VITE_IPWHO_BASE: Schema.optionalWith(Schema.URL, {
 		default: () => new URL('https://ipwho.is/'),
 	}),
+	VITE_GEOJS_URL: Schema.optionalWith(Schema.URL, {
+		default: () => new URL('https://get.geojs.io/v1/ip/geo.json'),
+	}),
 	VITE_CLOUDFLARE_TRACE_URL: Schema.optionalWith(Schema.URL, {
 		default: () => new URL('https://www.cloudflare.com/cdn-cgi/trace'),
 	}),

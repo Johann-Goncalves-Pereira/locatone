@@ -8,6 +8,8 @@ import { externalGetJson, externalGetText } from '@lib/external-fetch'
 import {
 	CloudflareTrace,
 	type CloudflareTrace as CloudflareTraceType,
+	GeoJsResponse,
+	type GeoJsResponse as GeoJsResponseType,
 	IpWhoResponse,
 	type IpWhoResponse as IpWhoResponseType,
 } from '@features/location/api/location.schema'
@@ -66,6 +68,15 @@ export const fetchIpWho = (
 	)
 }
 
+export const fetchGeoJs = (
+	signal?: AbortSignal,
+): Effect.Effect<GeoJsResponseType, ApiError | ParseError> =>
+	externalGetJson(
+		env.VITE_GEOJS_URL.href,
+		GeoJsResponse,
+		signal === undefined ? {} : { signal },
+	)
+
 export const fetchCloudflareTracePromise = (
 	signal?: AbortSignal,
 ): Promise<CloudflareTraceType> => runApiPromise(fetchCloudflareTrace(signal))
@@ -74,3 +85,7 @@ export const fetchIpWhoPromise = (
 	ip?: string,
 	signal?: AbortSignal,
 ): Promise<IpWhoResponseType> => runApiPromise(fetchIpWho(ip, signal))
+
+export const fetchGeoJsPromise = (
+	signal?: AbortSignal,
+): Promise<GeoJsResponseType> => runApiPromise(fetchGeoJs(signal))

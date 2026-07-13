@@ -105,7 +105,11 @@ export function fuseSignals(signals: readonly LocationSignal[]): FusedLocation {
 
 			const summary =
 				agreement === 'conflicted'
-					? 'Sinais com coordenadas divergem (VPN, proxy ou deslocamento recente?).'
+					? spreadConflict && hasConflict
+						? `Conflito: fontes a até ~${Math.round(maxDistanceKm)} km e países sem interseção (VPN, proxy ou viagem recente?).`
+						: spreadConflict
+							? `Conflito espacial: fontes com coordenadas distam até ~${Math.round(maxDistanceKm)} km (VPN, proxy ou deslocamento recente?).`
+							: 'Conflito de países: grupos de códigos sugeridos não se intersectam (VPN/proxy?).'
 					: `Posição fundida a partir de ${String(sourceIds.length)} sinal(is) com coordenadas.`
 
 			return {
@@ -167,7 +171,7 @@ export function fuseSignals(signals: readonly LocationSignal[]): FusedLocation {
 	return {
 		agreement: conflicted ? 'conflicted' : 'sparse',
 		summary: conflicted
-			? 'Sinais regionais conflitantes; não foi possível fundir uma posição.'
+			? `Sinais regionais conflitantes (${String(countryGroups.length)} grupos de país sem consenso); não foi possível fundir uma posição.`
 			: 'Poucos sinais úteis; conceda localização ou verifique a rede.',
 		confidence: 0,
 		sourceIds: signals.filter(s => s.status === 'ok').map(s => s.id),

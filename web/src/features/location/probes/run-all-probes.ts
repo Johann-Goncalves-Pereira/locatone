@@ -17,8 +17,10 @@ import {
 } from '@features/location/probes/run-intl'
 import {
 	runIpCloudflareProbe,
+	runIpGeoJsProbe,
 	runIpIpwhoProbe,
 } from '@features/location/probes/run-ip'
+import { runKeyboardLayoutProbe } from '@features/location/probes/run-keyboard'
 import {
 	runNetworkInfoProbe,
 	runPermissionStateProbe,
@@ -50,6 +52,7 @@ export async function runAllProbes(
 		settleSignal(runNetworkGeoProbe()),
 		settleSignal(runIpCloudflareProbe(signal)),
 		settleSignal(runIpIpwhoProbe(signal)),
+		settleSignal(runIpGeoJsProbe(signal)),
 		Promise.resolve(runTimezoneProbe()),
 		Promise.resolve(runLocaleProbe()),
 		settleSignal(runWebRtcStunProbe(signal)),
@@ -57,6 +60,7 @@ export async function runAllProbes(
 		Promise.resolve(runIntlCurrencyProbe()),
 		Promise.resolve(runIntlCalendarProbe()),
 		Promise.resolve(runFontLocaleProbe()),
+		settleSignal(runKeyboardLayoutProbe()),
 		settleSignal(runCompassProbe()),
 		Promise.resolve(runTzOffsetConflictProbe()),
 		Promise.resolve(runReferrerTldProbe()),

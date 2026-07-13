@@ -23,10 +23,10 @@ import {
 interface LocationMapProps {
 	readonly fused?: FusedLocation | undefined
 	readonly signals: readonly LocationSignal[]
-	readonly selectedSignalId: ProbeId | null
+	readonly selectedSignalIds: readonly ProbeId[]
 	readonly isCollecting: boolean
 	readonly panelOpen: boolean
-	readonly onSelectSignal: (id: ProbeId) => void
+	readonly onToggleSignal: (id: ProbeId) => void
 }
 
 const DEFAULT_CENTER: LatLngExpression = [-14.235, -51.925]
@@ -52,12 +52,12 @@ const fusedIcon = L.divIcon({
 function MapEffects({
 	fused,
 	points,
-	selected,
+	selectedIds,
 	panelOpen,
 }: {
 	readonly fused?: FusedLocation | undefined
 	readonly points: readonly SignalMapPoint[]
-	readonly selected?: LocationSignal | undefined
+	readonly selectedIds: readonly ProbeId[]
 	readonly panelOpen: boolean
 }) {
 	const map = useMap()
@@ -67,20 +67,32 @@ function MapEffects({
 	}, [map, panelOpen])
 
 	useEffect(() => {
-		if (selected?.lat !== undefined && selected.lng !== undefined) {
-			map.flyTo([selected.lat, selected.lng], Math.max(map.getZoom(), 8), {
-				duration: 0.8,
-			})
+		const selectedPoints = points.filter(point =>
+			selectedIds.includes(point.signal.id),
+		)
+
+		if (selectedPoints.length === 1) {
+			const only = selectedPoints[0]
+			if (only !== undefined) {
+				map.flyTo(
+					[only.lat, only.lng],
+					only.approximate ? 4 : Math.max(map.getZoom(), 8),
+					{ duration: 0.8 },
+				)
+			}
 			return
 		}
 
-		const selectedPoint = points.find(point => point.signal.id === selected?.id)
-		if (selectedPoint !== undefined) {
-			map.flyTo(
-				[selectedPoint.lat, selectedPoint.lng],
-				selectedPoint.approximate ? 4 : Math.max(map.getZoom(), 7),
-				{ duration: 0.8 },
+		if (selectedPoints.length > 1) {
+			const bounds = L.latLngBounds(
+				selectedPoints.map(point => [point.lat, point.lng]),
 			)
+			map.fitBounds(bounds, {
+				padding: [48, 48],
+				maxZoom: 12,
+				animate: true,
+				duration: 0.8,
+			})
 			return
 		}
 
@@ -119,12 +131,18 @@ function MapEffects({
 			animate: true,
 			duration: 1.1,
 		})
-	}, [fused, map, points, selected])
+	}, [fused, map, points, selectedIds])
 
 	return null
 }
 
-function MapLegend({ points }: { readonly points: readonly SignalMapPoint[] }) {
+function MapLegend({
+	points,
+	panelOpen,
+}: {
+	readonly points: readonly SignalMapPoint[]
+	readonly panelOpen: boolean
+}) {
 	if (points.length === 0) {
 		return null
 	}
@@ -140,7 +158,11 @@ function MapLegend({ points }: { readonly points: readonly SignalMapPoint[] }) {
 	}
 
 	return (
-		<div className='pointer-events-auto absolute bottom-3 left-3 z-[400] max-w-[min(calc(100%-1.5rem),22rem)] rounded-lg border border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_88%,transparent)] px-2.5 py-2 backdrop-blur-md'>
+		<div
+			className={`pointer-events-auto absolute bottom-3 left-3 z-[400] max-w-[min(calc(100%-1.5rem),22rem)] rounded-lg border border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_88%,transparent)] px-2.5 py-2 backdrop-blur-md ${
+				panelOpen ? 'mb-1 max-h-24 overflow-y-auto sm:max-h-none' : ''
+			}`}
+		>
 			<p className='mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--loc-muted)] uppercase'>
 				Métodos no mapa
 			</p>
@@ -153,6 +175,7 @@ function MapLegend({ points }: { readonly points: readonly SignalMapPoint[] }) {
 						<span
 							className='size-2.5 shrink-0 rounded-full'
 							style={{ backgroundColor: entry.color }}
+							aria-hidden
 						/>
 						{shortProbeLabel(entry.id)}
 					</li>
@@ -161,6 +184,7 @@ function MapLegend({ points }: { readonly points: readonly SignalMapPoint[] }) {
 					<span
 						className='size-2.5 shrink-0 rounded-full ring-2 ring-[var(--loc-ink)]/30'
 						style={{ backgroundColor: FUSED_COLOR }}
+						aria-hidden
 					/>
 					Fusão
 				</li>
@@ -172,12 +196,11 @@ function MapLegend({ points }: { readonly points: readonly SignalMapPoint[] }) {
 export function LocationMap({
 	fused,
 	signals,
-	selectedSignalId,
+	selectedSignalIds,
 	isCollecting,
 	panelOpen,
-	onSelectSignal,
+	onToggleSignal,
 }: LocationMapProps) {
-	const selected = signals.find(signal => signal.id === selectedSignalId)
 	const points = signalMapPoints(signals)
 	const center: LatLngExpression =
 		fused?.lat !== undefined && fused.lng !== undefined
@@ -211,12 +234,12 @@ export function LocationMap({
 				<MapEffects
 					fused={fused}
 					points={points}
-					selected={selected}
+					selectedIds={selectedSignalIds}
 					panelOpen={panelOpen}
 				/>
 				{points.map(point => {
 					const color = probeColor(point.signal.id)
-					const selectedPoint = selectedSignalId === point.signal.id
+					const selectedPoint = selectedSignalIds.includes(point.signal.id)
 					return (
 						<Fragment key={point.signal.id}>
 							{point.accuracyMeters !== undefined ? (
@@ -232,7 +255,7 @@ export function LocationMap({
 									}}
 									eventHandlers={{
 										click: () => {
-											onSelectSignal(point.signal.id)
+											onToggleSignal(point.signal.id)
 										},
 									}}
 								/>
@@ -243,7 +266,7 @@ export function LocationMap({
 								opacity={selectedPoint ? 1 : 0.75}
 								eventHandlers={{
 									click: () => {
-										onSelectSignal(point.signal.id)
+										onToggleSignal(point.signal.id)
 									},
 								}}
 								title={`${point.signal.label}${point.approximate ? ' (aprox.)' : ''}`}
@@ -269,7 +292,7 @@ export function LocationMap({
 					</>
 				) : null}
 			</MapContainer>
-			<MapLegend points={points} />
+			<MapLegend points={points} panelOpen={panelOpen} />
 		</div>
 	)
 }

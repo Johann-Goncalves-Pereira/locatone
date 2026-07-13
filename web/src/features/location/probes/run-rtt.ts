@@ -8,32 +8,49 @@ interface RttEndpoint {
 	readonly countryCodes: readonly string[]
 }
 
+/** Region-labeled hosts (soft priors). Anycast CDNs may still skew RTT. */
 const ENDPOINTS: readonly RttEndpoint[] = [
+	{
+		id: 'gov-br',
+		url: 'https://www.gov.br/favicon.ico',
+		regionHint: 'Brasil (gov.br)',
+		countryCodes: ['BR'],
+	},
+	{
+		id: 'nasa-us',
+		url: 'https://www.nasa.gov/favicon.ico',
+		regionHint: 'EUA (nasa.gov)',
+		countryCodes: ['US'],
+	},
+	{
+		id: 'bund-de',
+		url: 'https://www.bund.de/favicon.ico',
+		regionHint: 'Alemanha (bund.de)',
+		countryCodes: ['DE'],
+	},
+	{
+		id: 'go-jp',
+		url: 'https://www.digital.go.jp/favicon.ico',
+		regionHint: 'Japão (digital.go.jp)',
+		countryCodes: ['JP'],
+	},
+	{
+		id: 'gov-uk',
+		url: 'https://www.gov.uk/favicon.ico',
+		regionHint: 'Reino Unido (gov.uk)',
+		countryCodes: ['GB'],
+	},
 	{
 		id: 'cloudflare-global',
 		url: 'https://www.cloudflare.com/cdn-cgi/trace',
 		regionHint: 'Cloudflare anycast',
 		countryCodes: [],
 	},
-	{
-		id: 'cloudflare-dns',
-		url: 'https://cloudflare-dns.com/dns-query?name=example.com&type=A',
-		regionHint: 'Cloudflare DNS',
-		countryCodes: [],
-	},
-	{
-		id: 'jsdelivr',
-		url: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/package.json',
-		regionHint: 'jsDelivr CDN',
-		countryCodes: [],
-	},
-	{
-		id: 'fastly',
-		url: 'https://www.fastly.com/',
-		regionHint: 'Fastly edge',
-		countryCodes: [],
-	},
 ]
+
+type MeasuredSample = RttEndpoint & {
+	readonly rttMs: number | undefined
+}
 
 async function measureRtt(
 	url: string,
@@ -65,11 +82,19 @@ async function measureRtt(
 	}
 }
 
+function collectFastestCountryCodes(
+	sorted: readonly MeasuredSample[],
+): readonly string[] {
+	const top = sorted.filter(sample => sample.rttMs !== undefined).slice(0, 3)
+	const codes = top.flatMap(sample => [...sample.countryCodes])
+	return [...new Set(codes)]
+}
+
 export async function runRttProbe(
 	signal?: AbortSignal,
 ): Promise<LocationSignal> {
 	const label = 'Triangulação por latência (RTT)'
-	const samples = await Promise.all(
+	const samples: MeasuredSample[] = await Promise.all(
 		ENDPOINTS.map(async endpoint => {
 			const rttMs = await measureRtt(endpoint.url, signal)
 			return { ...endpoint, rttMs }
@@ -95,26 +120,35 @@ export async function runRttProbe(
 		return aRtt - bRtt
 	})
 	const fastest = sorted[0]
+	const countryCodes = collectFastestCountryCodes(sorted)
+	const hasRegionPrior = countryCodes.length > 0
+	const confidence = hasRegionPrior
+		? Math.min(0.28, 0.14 + measured.length * 0.02)
+		: 0.12
 
 	return makeSignal({
 		id: 'rtt_probe',
 		label,
 		status: 'ok',
-		confidence: 0.12,
+		confidence,
 		summary: fastest
-			? `Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms). Sinal fraco.`
+			? hasRegionPrior
+				? `Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms). Prioridades: ${countryCodes.join(', ')}.`
+				: `Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms). Sinal fraco (sem prior de país).`
 			: 'Amostras RTT coletadas.',
 		regionHints: {
-			countryCodes: fastest ? [...fastest.countryCodes] : [],
+			countryCodes: [...countryCodes],
 		},
 		raw: {
 			samples: samples.map(sample => ({
 				id: sample.id,
 				url: sample.url,
 				regionHint: sample.regionHint,
+				countryCodes: [...sample.countryCodes],
 				rttMs: sample.rttMs === undefined ? null : Math.round(sample.rttMs),
 			})),
-			note: 'RTT to CDNs is a weak prior; anycast skews results.',
+			fastestCountries: [...countryCodes],
+			note: 'RTT a hosts regionais é prior fraca; CDNs anycast e rota ISP podem distorcer.',
 		},
 	})
 }

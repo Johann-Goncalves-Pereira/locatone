@@ -68,6 +68,7 @@ describe('fuseSignals', () => {
 		])
 
 		expect(fused.agreement).toBe('conflicted')
+		expect(fused.summary).toMatch(/Conflito/)
 	})
 
 	it('falls back to sparse country centroid without coordinates', () => {

@@ -8,30 +8,40 @@ import { signalBadgeLabel } from '@features/location/lib/signal-badge'
 interface SignalCardProps {
 	readonly signal: LocationSignal
 	readonly selected: boolean
-	readonly onSelect: (id: ProbeId) => void
+	readonly placeholder?: boolean | undefined
+	readonly onToggle: (id: ProbeId) => void
 }
 
 const BLOCKED_COLOR = '#F43F5E'
 
-export function SignalCard({ signal, selected, onSelect }: SignalCardProps) {
+export function SignalCard({
+	signal,
+	selected,
+	placeholder = false,
+	onToggle,
+}: SignalCardProps) {
 	const blocked = signal.status === 'denied'
 	const color = blocked ? BLOCKED_COLOR : probeColor(signal.id)
-	const badge = signalBadgeLabel(signal)
+	const badge = placeholder ? '…' : signalBadgeLabel(signal)
 
 	return (
 		<button
 			type='button'
+			disabled={placeholder}
+			aria-pressed={selected}
 			onClick={() => {
-				onSelect(signal.id)
+				onToggle(signal.id)
 			}}
-			className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-				selected
-					? 'bg-[var(--loc-panel-strong)]'
-					: blocked
-						? 'border-rose-500/40 bg-[var(--loc-panel)]'
-						: 'border-[var(--loc-border)] bg-[var(--loc-panel)] hover:border-[var(--loc-accent-dim)]'
+			className={`w-full rounded-xl border px-3 py-3 text-left transition focus-visible:ring-2 focus-visible:ring-[var(--loc-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--loc-bg)] focus-visible:outline-none ${
+				placeholder
+					? 'locatone-placeholder border-[var(--loc-border)] bg-[var(--loc-panel)] opacity-70'
+					: selected
+						? 'bg-[var(--loc-panel-strong)]'
+						: blocked
+							? 'border-rose-500/40 bg-[var(--loc-panel)]'
+							: 'border-[var(--loc-border)] bg-[var(--loc-panel)] hover:border-[var(--loc-accent-dim)]'
 			}`}
-			style={selected ? { borderColor: color } : undefined}
+			style={selected && !placeholder ? { borderColor: color } : undefined}
 		>
 			<div className='flex items-start justify-between gap-3'>
 				<div className='min-w-0'>
@@ -64,7 +74,7 @@ export function SignalCard({ signal, selected, onSelect }: SignalCardProps) {
 					{badge}
 				</span>
 			</div>
-			{selected ? (
+			{selected && !placeholder ? (
 				<pre className='mt-3 max-h-56 overflow-y-auto overscroll-contain rounded-lg bg-[var(--loc-bg)] p-2 font-mono text-[10px] leading-relaxed text-[var(--loc-muted)]'>
 					{JSON.stringify(signal.raw, null, 2)}
 				</pre>

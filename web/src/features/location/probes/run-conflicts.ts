@@ -80,6 +80,7 @@ export function runIpVsTzProbe(
 			signal =>
 				(signal.id === 'ip_cloudflare' ||
 					signal.id === 'ip_ipwho' ||
+					signal.id === 'ip_geojs' ||
 					signal.id === 'webrtc_stun') &&
 				signal.status === 'ok',
 		)

@@ -11,7 +11,7 @@ function isValidIpv4(ip: string): boolean {
 	return IPV4_PATTERN.test(ip) && IPV4_PATTERN.exec(ip)?.[0] === ip
 }
 
-function isPrivateIp(ip: string): boolean {
+function isPrivateIpv4(ip: string): boolean {
 	return (
 		ip.startsWith('10.') ||
 		ip.startsWith('192.168.') ||
@@ -19,6 +19,46 @@ function isPrivateIp(ip: string): boolean {
 		ip.startsWith('127.') ||
 		ip.startsWith('169.254.')
 	)
+}
+
+function stripIpv6Brackets(ip: string): string {
+	if (ip.startsWith('[') && ip.endsWith(']')) {
+		return ip.slice(1, -1)
+	}
+	return ip
+}
+
+function looksLikeIpv6(ip: string): boolean {
+	const cleaned = stripIpv6Brackets(ip)
+	if (!cleaned.includes(':') || cleaned.includes('.')) {
+		return false
+	}
+	return /^[0-9a-fA-F:]+$/.test(cleaned) && /[0-9a-fA-F]/.test(cleaned)
+}
+
+function isPrivateOrLocalIpv6(ip: string): boolean {
+	const lower = stripIpv6Brackets(ip).toLowerCase()
+	if (lower === '::1' || lower === '::') {
+		return true
+	}
+	if (lower.startsWith('fe80:')) {
+		return true
+	}
+	if (lower.startsWith('fc') || lower.startsWith('fd')) {
+		return true
+	}
+	if (lower.startsWith('::ffff:')) {
+		return true
+	}
+	return false
+}
+
+function isPublicIpv6(ip: string): boolean {
+	const cleaned = stripIpv6Brackets(ip)
+	if (!looksLikeIpv6(cleaned)) {
+		return false
+	}
+	return !isPrivateOrLocalIpv6(cleaned)
 }
 
 /** Prefer RTCIceCandidate.address; fall back to a strict IPv4 match in the SDP line. */
@@ -29,24 +69,68 @@ export function extractPublicIpv4(
 	if (
 		typeof address === 'string' &&
 		isValidIpv4(address) &&
-		!isPrivateIp(address)
+		!isPrivateIpv4(address)
 	) {
 		return address
 	}
 
 	const match = IPV4_PATTERN.exec(candidateLine)
 	const ip = match?.[0]
-	if (ip !== undefined && !isPrivateIp(ip)) {
+	if (ip !== undefined && !isPrivateIpv4(ip)) {
 		return ip
 	}
 
 	return undefined
 }
 
-function extractPublicIpv4FromIce(
-	candidate: RTCIceCandidate,
+/** Prefer RTCIceCandidate.address; fall back to IPv6 in the SDP candidate line. */
+export function extractPublicIpv6(
+	address: string | null | undefined,
+	candidateLine: string,
 ): string | undefined {
-	return extractPublicIpv4(candidate.address, candidate.candidate)
+	if (typeof address === 'string') {
+		const cleaned = stripIpv6Brackets(address)
+		if (isPublicIpv6(cleaned)) {
+			return cleaned
+		}
+	}
+
+	const bracketMatch = /\[([0-9a-fA-F:]+)\]/.exec(candidateLine)
+	const bracketed = bracketMatch?.[1]
+	if (bracketed !== undefined && isPublicIpv6(bracketed)) {
+		return bracketed
+	}
+
+	const parts = candidateLine.split(' ')
+	for (const part of parts) {
+		const cleaned = stripIpv6Brackets(part)
+		if (isPublicIpv6(cleaned)) {
+			return cleaned
+		}
+	}
+
+	return undefined
+}
+
+export function extractPublicIp(
+	address: string | null | undefined,
+	candidateLine: string,
+): { readonly ip: string; readonly family: 'ipv4' | 'ipv6' } | undefined {
+	const ipv4 = extractPublicIpv4(address, candidateLine)
+	if (ipv4 !== undefined) {
+		return { ip: ipv4, family: 'ipv4' }
+	}
+	const ipv6 = extractPublicIpv6(address, candidateLine)
+	if (ipv6 !== undefined) {
+		return { ip: ipv6, family: 'ipv6' }
+	}
+	return undefined
+}
+
+function extractPublicIpFromIce(
+	candidate: RTCIceCandidate,
+): { readonly ip: string; readonly family: 'ipv4' | 'ipv6' } | undefined {
+	return extractPublicIp(candidate.address, candidate.candidate)
 }
 
 export async function runWebRtcStunProbe(
@@ -66,7 +150,8 @@ export async function runWebRtcStunProbe(
 
 	const stunUrl = env.VITE_STUN_URL
 	const candidates: string[] = []
-	const publicIps = new Set<string>()
+	const publicIpv4 = new Set<string>()
+	const publicIpv6 = new Set<string>()
 
 	try {
 		const pc = new RTCPeerConnection({
@@ -98,9 +183,14 @@ export async function runWebRtcStunProbe(
 					return
 				}
 				candidates.push(event.candidate.candidate)
-				const ip = extractPublicIpv4FromIce(event.candidate)
-				if (ip !== undefined) {
-					publicIps.add(ip)
+				const found = extractPublicIpFromIce(event.candidate)
+				if (found === undefined) {
+					return
+				}
+				if (found.family === 'ipv4') {
+					publicIpv4.add(found.ip)
+				} else {
+					publicIpv6.add(found.ip)
 				}
 			}
 
@@ -112,28 +202,30 @@ export async function runWebRtcStunProbe(
 
 		pc.close()
 
-		const ipList = [...publicIps]
-		if (ipList.length === 0) {
+		const ipv4List = [...publicIpv4]
+		const ipv6List = [...publicIpv6]
+		const primaryIp = ipv4List[0] ?? ipv6List[0]
+		const primaryFamily =
+			ipv4List[0] !== undefined
+				? 'ipv4'
+				: ipv6List[0] !== undefined
+					? 'ipv6'
+					: undefined
+
+		if (primaryIp === undefined || primaryFamily === undefined) {
 			return makeSignal({
 				id: 'webrtc_stun',
 				label,
 				status: 'ok',
 				confidence: 0,
 				summary:
-					'ICE concluído sem IPv4 público válido (rede restrita ou mascarada).',
-				raw: { stunUrl, candidates, publicIps: ipList },
-			})
-		}
-
-		const primaryIp = ipList[0]
-		if (primaryIp === undefined) {
-			return makeSignal({
-				id: 'webrtc_stun',
-				label,
-				status: 'ok',
-				confidence: 0,
-				summary: 'Sem IP público útil.',
-				raw: { stunUrl, candidates, publicIps: ipList },
+					'ICE concluído sem IP público válido (rede restrita ou mascarada).',
+				raw: {
+					stunUrl,
+					candidates,
+					publicIpv4: ipv4List,
+					publicIpv6: ipv6List,
+				},
 			})
 		}
 
@@ -147,11 +239,14 @@ export async function runWebRtcStunProbe(
 				label,
 				status: 'ok',
 				confidence: 0.2,
-				summary: `IP STUN ${primaryIp} (geo falhou: ${geo.message ?? 'desconhecido'}).`,
+				summary: `IP STUN ${primaryIp} (${primaryFamily}; geo falhou: ${geo.message ?? 'desconhecido'}).`,
 				raw: {
 					stunUrl,
 					candidates,
-					publicIps: ipList,
+					publicIpv4: ipv4List,
+					publicIpv6: ipv6List,
+					primaryIp,
+					primaryFamily,
 					geo,
 				},
 			})
@@ -170,8 +265,8 @@ export async function runWebRtcStunProbe(
 					}
 				: {}),
 			summary: hasCoords
-				? `IP STUN ${primaryIp} → ${[geo.city, geo.country].filter(Boolean).join(', ')}.`
-				: `IP STUN público: ${primaryIp}.`,
+				? `IP STUN ${primaryIp} (${primaryFamily}) → ${[geo.city, geo.country].filter(Boolean).join(', ')}.`
+				: `IP STUN público: ${primaryIp} (${primaryFamily}).`,
 			regionHints: {
 				countryCodes: geo.country_code ? [geo.country_code] : [],
 				countries: geo.country ? [geo.country] : [],
@@ -180,7 +275,10 @@ export async function runWebRtcStunProbe(
 			raw: {
 				stunUrl,
 				candidates,
-				publicIps: ipList,
+				publicIpv4: ipv4List,
+				publicIpv6: ipv6List,
+				primaryIp,
+				primaryFamily,
 				geo,
 			},
 		})

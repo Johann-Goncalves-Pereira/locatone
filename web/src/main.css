@@ -28,17 +28,22 @@ body {
 }
 
 .locatone-atmosphere {
-	opacity: 0.55;
+	opacity: 0.6;
 	mix-blend-mode: soft-light;
 	background:
 		radial-gradient(
 			1200px 600px at 15% -10%,
-			color-mix(in oklab, var(--loc-accent) 18%, transparent),
+			color-mix(in oklab, var(--loc-accent) 20%, transparent),
 			transparent 60%
 		),
 		radial-gradient(
 			900px 500px at 90% 20%,
-			color-mix(in oklab, #1b6b5a 35%, transparent),
+			color-mix(in oklab, #1b6b5a 38%, transparent),
+			transparent 55%
+		),
+		radial-gradient(
+			700px 420px at 50% 110%,
+			color-mix(in oklab, var(--loc-accent) 10%, transparent),
 			transparent 55%
 		),
 		repeating-linear-gradient(
@@ -105,6 +110,41 @@ body {
 	to {
 		transform: translateX(400%);
 	}
+}
+
+@keyframes locatone-fuse-in {
+	from {
+		transform: translateY(6px);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+@keyframes locatone-placeholder-shimmer {
+	from {
+		background-position: 100% 0;
+	}
+	to {
+		background-position: -100% 0;
+	}
+}
+
+.locatone-fuse-card {
+	animation: locatone-fuse-in 0.45s ease-out both;
+}
+
+.locatone-placeholder {
+	animation: locatone-placeholder-shimmer 1.6s linear infinite;
+	background-image: linear-gradient(
+		100deg,
+		transparent 30%,
+		color-mix(in oklab, var(--loc-ink) 6%, transparent) 50%,
+		transparent 70%
+	);
+	background-size: 200% 100%;
 }
 
 .leaflet-container {

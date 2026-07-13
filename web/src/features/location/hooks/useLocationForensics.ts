@@ -9,15 +9,15 @@ import type {
 } from '@features/location/api/location.schema'
 import {
 	scanRunIdAtom,
-	selectedSignalIdAtom,
+	selectedSignalIdsAtom,
 } from '@features/location/atoms/location-ui.atom'
 import { fuseSignals } from '@features/location/lib/fuse-signals'
 
 export function useLocationForensics(panel: PanelState) {
 	const runId = useAtomValue(scanRunIdAtom)
 	const setRunId = useAtomSet(scanRunIdAtom)
-	const selectedSignalId = useAtomValue(selectedSignalIdAtom)
-	const setSelectedSignalId = useAtomSet(selectedSignalIdAtom)
+	const selectedSignalIds = useAtomValue(selectedSignalIdsAtom)
+	const setSelectedSignalIds = useAtomSet(selectedSignalIdsAtom)
 
 	const query = useLocationScanQuery(runId)
 	const signals: readonly LocationSignal[] = query.data ?? []
@@ -25,12 +25,16 @@ export function useLocationForensics(panel: PanelState) {
 		signals.length > 0 ? fuseSignals(signals) : undefined
 
 	function revealOrigin() {
-		setSelectedSignalId(null)
+		setSelectedSignalIds([])
 		setRunId(runId + 1)
 	}
 
-	function selectSignal(id: ProbeId | null) {
-		setSelectedSignalId(id)
+	function toggleSignal(id: ProbeId) {
+		if (selectedSignalIds.includes(id)) {
+			setSelectedSignalIds(selectedSignalIds.filter(item => item !== id))
+			return
+		}
+		setSelectedSignalIds([...selectedSignalIds, id])
 	}
 
 	return {
@@ -47,8 +51,8 @@ export function useLocationForensics(panel: PanelState) {
 					: undefined,
 		signals,
 		fused,
-		selectedSignalId,
+		selectedSignalIds,
 		revealOrigin,
-		selectSignal,
+		toggleSignal,
 	}
 }

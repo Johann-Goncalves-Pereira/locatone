@@ -5,6 +5,7 @@ export const ProbeId = Schema.Literal(
 	'network_geo',
 	'ip_cloudflare',
 	'ip_ipwho',
+	'ip_geojs',
 	'timezone',
 	'locale',
 	'webrtc_stun',
@@ -12,6 +13,7 @@ export const ProbeId = Schema.Literal(
 	'intl_currency',
 	'intl_calendar',
 	'font_locale',
+	'keyboard_layout',
 	'compass',
 	'tz_offset_conflict',
 	'ip_vs_tz',
@@ -111,6 +113,19 @@ export const CloudflareTrace = Schema.Struct({
 	http: Schema.optional(Schema.String),
 })
 export type CloudflareTrace = typeof CloudflareTrace.Type
+
+export const GeoJsResponse = Schema.Struct({
+	ip: Schema.optional(Schema.String),
+	country: Schema.optional(Schema.String),
+	country_code: Schema.optional(Schema.String),
+	city: Schema.optional(Schema.String),
+	region: Schema.optional(Schema.String),
+	latitude: Schema.optional(Schema.Union(Schema.Number, Schema.String)),
+	longitude: Schema.optional(Schema.Union(Schema.Number, Schema.String)),
+	timezone: Schema.optional(Schema.String),
+	organization_name: Schema.optional(Schema.String),
+})
+export type GeoJsResponse = typeof GeoJsResponse.Type
 
 export const StoredCoordinates = Schema.Struct({
 	lat: Schema.Number,

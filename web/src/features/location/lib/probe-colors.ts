@@ -2,11 +2,12 @@ import type { ProbeId } from '@features/location/api/location.schema'
 
 export const FUSED_COLOR = '#3EE0C0'
 
-const PROBE_COLORS = {
+export const PROBE_COLORS = {
 	gps: '#3EE0C0',
 	network_geo: '#22D3EE',
 	ip_cloudflare: '#34D399',
 	ip_ipwho: '#10B981',
+	ip_geojs: '#059669',
 	timezone: '#A855F7',
 	locale: '#8B5CF6',
 	webrtc_stun: '#84CC16',
@@ -14,6 +15,7 @@ const PROBE_COLORS = {
 	intl_currency: '#EC4899',
 	intl_calendar: '#D946EF',
 	font_locale: '#F97316',
+	keyboard_layout: '#EAB308',
 	compass: '#94A3B8',
 	tz_offset_conflict: '#FB7185',
 	ip_vs_tz: '#F43F5E',
@@ -32,6 +34,7 @@ export const SHORT_PROBE_LABELS = {
 	network_geo: 'Rede',
 	ip_cloudflare: 'IP CF',
 	ip_ipwho: 'IP who',
+	ip_geojs: 'IP geojs',
 	timezone: 'Fuso',
 	locale: 'Locale',
 	webrtc_stun: 'STUN',
@@ -39,6 +42,7 @@ export const SHORT_PROBE_LABELS = {
 	intl_currency: 'Moeda',
 	intl_calendar: 'Calend.',
 	font_locale: 'Fontes',
+	keyboard_layout: 'Teclado',
 	compass: 'Bússola',
 	tz_offset_conflict: 'Offset',
 	ip_vs_tz: 'IP×fuso',

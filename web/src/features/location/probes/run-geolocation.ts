@@ -29,14 +29,40 @@ function getPosition(options: PositionOptions): Promise<GeolocationPosition> {
 	})
 }
 
+function pickBetterPosition(
+	first: GeolocationPosition,
+	second: GeolocationPosition | undefined,
+): { readonly position: GeolocationPosition; readonly sampleCount: number } {
+	if (second === undefined) {
+		return { position: first, sampleCount: 1 }
+	}
+	if (second.coords.accuracy < first.coords.accuracy) {
+		return { position: second, sampleCount: 2 }
+	}
+	return { position: first, sampleCount: 2 }
+}
+
 export async function runGpsProbe(): Promise<LocationSignal> {
 	const label = 'GPS / GNSS'
 	try {
-		const position = await getPosition({
+		const first = await getPosition({
 			enableHighAccuracy: true,
-			timeout: 15_000,
+			timeout: 12_000,
 			maximumAge: 0,
 		})
+
+		let second: GeolocationPosition | undefined
+		try {
+			second = await getPosition({
+				enableHighAccuracy: true,
+				timeout: 5_000,
+				maximumAge: 0,
+			})
+		} catch {
+			second = undefined
+		}
+
+		const { position, sampleCount } = pickBetterPosition(first, second)
 		const { latitude, longitude, accuracy, altitude, heading, speed } =
 			position.coords
 		return makeSignal({
@@ -47,7 +73,7 @@ export async function runGpsProbe(): Promise<LocationSignal> {
 			lat: latitude,
 			lng: longitude,
 			accuracyMeters: accuracy,
-			summary: `Coordenadas de alta precisão (±${Math.round(accuracy)} m).`,
+			summary: `Coordenadas de alta precisão (±${Math.round(accuracy)} m; ${String(sampleCount)} amostra${sampleCount > 1 ? 's' : ''}).`,
 			raw: {
 				latitude,
 				longitude,
@@ -56,6 +82,21 @@ export async function runGpsProbe(): Promise<LocationSignal> {
 				heading,
 				speed,
 				timestamp: position.timestamp,
+				sampleCount,
+				samples: [
+					{
+						accuracy: first.coords.accuracy,
+						timestamp: first.timestamp,
+					},
+					...(second === undefined
+						? []
+						: [
+								{
+									accuracy: second.coords.accuracy,
+									timestamp: second.timestamp,
+								},
+							]),
+				],
 			},
 		})
 	} catch (error) {

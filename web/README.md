@@ -1,8 +1,8 @@
 # Locatone
 
-Forense de localização no navegador: coleta múltiplos sinais (GPS, rede, IP,
-WebRTC, Intl, latência e outros) e mostra um ponto fundido no mapa com um painel
-transparente de cada método.
+Forense de localização no navegador: coleta múltiplos sinais (GPS, rede, IP
+Cloudflare/ipwho/geojs, WebRTC/STUN, Intl, latência, teclado e outros) e mostra
+um ponto fundido no mapa com um painel transparente de cada método.
 
 ## Stack
 
@@ -23,7 +23,8 @@ pnpm dev
 
 Copy `.env.example` to `.env` to override STUN / IP lookup bases. Only use the
 `VITE_` prefix for values safe to expose in the browser. Locatone v1 is
-client-only and uses public APIs (Cloudflare trace, ipwho.is, public STUN).
+client-only and uses public APIs (Cloudflare trace, ipwho.is, geojs.io, public
+STUN).
 
 ## Scripts
 
