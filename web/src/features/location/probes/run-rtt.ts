@@ -1,4 +1,5 @@
 import type { LocationSignal } from '@features/location/api/location.schema'
+import { softLaterateFromRtt } from '@features/location/lib/rtt-lateration'
 import { makeSignal } from '@features/location/probes/signal-helpers'
 
 interface RttEndpoint {
@@ -6,6 +7,9 @@ interface RttEndpoint {
 	readonly url: string
 	readonly regionHint: string
 	readonly countryCodes: readonly string[]
+	readonly lat: number | undefined
+	readonly lng: number | undefined
+	readonly isLandmark: boolean
 }
 
 /** Region-labeled hosts (soft priors). Anycast CDNs may still skew RTT. */
@@ -15,36 +19,54 @@ const ENDPOINTS: readonly RttEndpoint[] = [
 		url: 'https://www.gov.br/favicon.ico',
 		regionHint: 'Brasil (gov.br)',
 		countryCodes: ['BR'],
+		lat: -15.78,
+		lng: -47.93,
+		isLandmark: true,
 	},
 	{
 		id: 'nasa-us',
 		url: 'https://www.nasa.gov/favicon.ico',
 		regionHint: 'EUA (nasa.gov)',
 		countryCodes: ['US'],
+		lat: 38.88,
+		lng: -77.01,
+		isLandmark: true,
 	},
 	{
 		id: 'bund-de',
 		url: 'https://www.bund.de/favicon.ico',
 		regionHint: 'Alemanha (bund.de)',
 		countryCodes: ['DE'],
+		lat: 52.52,
+		lng: 13.4,
+		isLandmark: true,
 	},
 	{
 		id: 'go-jp',
 		url: 'https://www.digital.go.jp/favicon.ico',
 		regionHint: 'Japão (digital.go.jp)',
 		countryCodes: ['JP'],
+		lat: 35.68,
+		lng: 139.76,
+		isLandmark: true,
 	},
 	{
 		id: 'gov-uk',
 		url: 'https://www.gov.uk/favicon.ico',
 		regionHint: 'Reino Unido (gov.uk)',
 		countryCodes: ['GB'],
+		lat: 51.5,
+		lng: -0.12,
+		isLandmark: true,
 	},
 	{
 		id: 'cloudflare-global',
 		url: 'https://www.cloudflare.com/cdn-cgi/trace',
 		regionHint: 'Cloudflare anycast',
 		countryCodes: [],
+		lat: undefined,
+		lng: undefined,
+		isLandmark: false,
 	},
 ]
 
@@ -122,19 +144,53 @@ export async function runRttProbe(
 	const fastest = sorted[0]
 	const countryCodes = collectFastestCountryCodes(sorted)
 	const hasRegionPrior = countryCodes.length > 0
-	const confidence = hasRegionPrior
-		? Math.min(0.28, 0.14 + measured.length * 0.02)
-		: 0.12
+
+	const landmarks = measured.flatMap(sample => {
+		if (
+			!sample.isLandmark ||
+			sample.rttMs === undefined ||
+			sample.lat === undefined ||
+			sample.lng === undefined
+		) {
+			return []
+		}
+		return [
+			{
+				id: sample.id,
+				lat: sample.lat,
+				lng: sample.lng,
+				countryCodes: sample.countryCodes,
+				rttMs: sample.rttMs,
+			},
+		]
+	})
+
+	const lateration = softLaterateFromRtt(landmarks)
+	const confidence =
+		lateration !== undefined
+			? lateration.confidence
+			: hasRegionPrior
+				? Math.min(0.28, 0.14 + measured.length * 0.02)
+				: 0.12
 
 	return makeSignal({
 		id: 'rtt_probe',
 		label,
 		status: 'ok',
 		confidence,
+		...(lateration !== undefined
+			? {
+					lat: lateration.lat,
+					lng: lateration.lng,
+					accuracyMeters: lateration.accuracyMeters,
+				}
+			: {}),
 		summary: fastest
-			? hasRegionPrior
-				? `Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms). Prioridades: ${countryCodes.join(', ')}.`
-				: `Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms). Sinal fraco (sem prior de país).`
+			? lateration !== undefined
+				? `Lateração fraca (~±${Math.round(lateration.accuracyMeters / 1000)} km). Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms).`
+				: hasRegionPrior
+					? `Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms). Prioridades: ${countryCodes.join(', ')}.`
+					: `Menor RTT: ${fastest.regionHint} (~${Math.round(fastest.rttMs ?? 0)} ms). Sinal fraco (sem prior de país).`
 			: 'Amostras RTT coletadas.',
 		regionHints: {
 			countryCodes: [...countryCodes],
@@ -146,9 +202,19 @@ export async function runRttProbe(
 				regionHint: sample.regionHint,
 				countryCodes: [...sample.countryCodes],
 				rttMs: sample.rttMs === undefined ? null : Math.round(sample.rttMs),
+				isLandmark: sample.isLandmark,
 			})),
 			fastestCountries: [...countryCodes],
-			note: 'RTT a hosts regionais é prior fraca; CDNs anycast e rota ISP podem distorcer.',
+			lateration:
+				lateration === undefined
+					? null
+					: {
+							lat: lateration.lat,
+							lng: lateration.lng,
+							accuracyMeters: lateration.accuracyMeters,
+							confidence: lateration.confidence,
+						},
+			note: 'RTT a hosts regionais é lateração fraca; CDNs anycast e rota ISP podem distorcer.',
 		},
 	})
 }

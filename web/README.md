@@ -1,8 +1,9 @@
 # Locatone
 
 Forense de localização no navegador: coleta múltiplos sinais (GPS, rede, IP
-Cloudflare/ipwho/geojs, WebRTC/STUN, Intl, latência, teclado e outros) e mostra
-um ponto fundido no mapa com um painel transparente de cada método.
+Cloudflare/ipwho/geojs, WebRTC/STUN, Intl, RTT, fontes, sensores, teclado e
+outros) e mostra um ponto fundido no mapa com um painel transparente de cada
+método.
 
 ## Stack
 

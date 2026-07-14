@@ -34,12 +34,20 @@ function collectCountryCodes(
 }
 
 export function fuseSignals(signals: readonly LocationSignal[]): FusedLocation {
-	const withCoords = signals.filter(
-		signal =>
-			signal.status === 'ok' &&
-			signal.lat !== undefined &&
-			signal.lng !== undefined,
-	)
+	const withCoords = signals.filter(signal => {
+		if (
+			signal.status !== 'ok' ||
+			signal.lat === undefined ||
+			signal.lng === undefined
+		) {
+			return false
+		}
+		// Soft RTT lateration only when confidence is meaningful but still weak.
+		if (signal.id === 'rtt_probe' && signal.confidence < 0.12) {
+			return false
+		}
+		return true
+	})
 
 	if (withCoords.length > 0) {
 		let weightSum = 0

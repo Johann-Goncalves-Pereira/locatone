@@ -42,6 +42,20 @@ function pickBetterPosition(
 	return { position: first, sampleCount: 2 }
 }
 
+function formatAltitudeSummary(
+	altitude: number | null,
+	altitudeAccuracy: number | null,
+): string {
+	if (altitude === null) {
+		return ''
+	}
+	const accuracyPart =
+		altitudeAccuracy === null
+			? ''
+			: ` (±${Math.round(altitudeAccuracy)} m vert.)`
+	return ` Altitude ${Math.round(altitude)} m${accuracyPart}.`
+}
+
 export async function runGpsProbe(): Promise<LocationSignal> {
 	const label = 'GPS / GNSS'
 	try {
@@ -63,8 +77,16 @@ export async function runGpsProbe(): Promise<LocationSignal> {
 		}
 
 		const { position, sampleCount } = pickBetterPosition(first, second)
-		const { latitude, longitude, accuracy, altitude, heading, speed } =
-			position.coords
+		const {
+			latitude,
+			longitude,
+			accuracy,
+			altitude,
+			altitudeAccuracy,
+			heading,
+			speed,
+		} = position.coords
+		const altitudeSummary = formatAltitudeSummary(altitude, altitudeAccuracy)
 		return makeSignal({
 			id: 'gps',
 			label,
@@ -73,12 +95,13 @@ export async function runGpsProbe(): Promise<LocationSignal> {
 			lat: latitude,
 			lng: longitude,
 			accuracyMeters: accuracy,
-			summary: `Coordenadas de alta precisão (±${Math.round(accuracy)} m; ${String(sampleCount)} amostra${sampleCount > 1 ? 's' : ''}).`,
+			summary: `Coordenadas de alta precisão (±${Math.round(accuracy)} m; ${String(sampleCount)} amostra${sampleCount > 1 ? 's' : ''}).${altitudeSummary}`,
 			raw: {
 				latitude,
 				longitude,
 				accuracy,
 				altitude,
+				altitudeAccuracy,
 				heading,
 				speed,
 				timestamp: position.timestamp,
@@ -86,6 +109,7 @@ export async function runGpsProbe(): Promise<LocationSignal> {
 				samples: [
 					{
 						accuracy: first.coords.accuracy,
+						altitude: first.coords.altitude,
 						timestamp: first.timestamp,
 					},
 					...(second === undefined
@@ -93,6 +117,7 @@ export async function runGpsProbe(): Promise<LocationSignal> {
 						: [
 								{
 									accuracy: second.coords.accuracy,
+									altitude: second.coords.altitude,
 									timestamp: second.timestamp,
 								},
 							]),
@@ -144,7 +169,17 @@ export async function runNetworkGeoProbe(): Promise<LocationSignal> {
 			timeout: 15_000,
 			maximumAge: 60_000,
 		})
-		const { latitude, longitude, accuracy } = position.coords
+		const {
+			latitude,
+			longitude,
+			accuracy,
+			altitude,
+			altitudeAccuracy,
+			heading,
+			speed,
+		} = position.coords
+		const coarse = accuracy >= 1000
+		const altitudeSummary = formatAltitudeSummary(altitude, altitudeAccuracy)
 		return makeSignal({
 			id: 'network_geo',
 			label,
@@ -153,11 +188,16 @@ export async function runNetworkGeoProbe(): Promise<LocationSignal> {
 			lat: latitude,
 			lng: longitude,
 			accuracyMeters: accuracy,
-			summary: `Localização de rede do navegador (±${Math.round(accuracy)} m). Wi‑Fi e torres não são separados na Web.`,
+			summary: `Localização de rede do navegador (±${Math.round(accuracy)} m; ${coarse ? 'coarse' : 'fina'}). Wi‑Fi e torres não são separados na Web.${altitudeSummary}`,
 			raw: {
 				latitude,
 				longitude,
 				accuracy,
+				altitude,
+				altitudeAccuracy,
+				heading,
+				speed,
+				coarse,
 				note: 'Browser chooses Wi‑Fi and/or cell; not separately exposable.',
 				timestamp: position.timestamp,
 			},

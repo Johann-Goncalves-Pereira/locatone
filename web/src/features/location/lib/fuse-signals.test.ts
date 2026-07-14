@@ -91,4 +91,28 @@ describe('fuseSignals', () => {
 		expect(fused.lat).toBeDefined()
 		expect(fused.lng).toBeDefined()
 	})
+
+	it('ignores weak RTT lateration below confidence floor', () => {
+		const fused = fuseSignals([
+			signal({
+				id: 'rtt_probe',
+				status: 'ok',
+				confidence: 0.1,
+				lat: 0,
+				lng: 0,
+				accuracyMeters: 2_000_000,
+				regionHints: { countryCodes: ['BR'] },
+			}),
+			signal({
+				id: 'ip_cloudflare',
+				status: 'ok',
+				confidence: 0.5,
+				regionHints: { countryCodes: ['BR'] },
+			}),
+		])
+
+		expect(fused.agreement).toBe('sparse')
+		expect(fused.lat ?? 0).toBeCloseTo(-14.2, 0)
+		expect(fused.lng ?? 0).toBeCloseTo(-51.9, 0)
+	})
 })

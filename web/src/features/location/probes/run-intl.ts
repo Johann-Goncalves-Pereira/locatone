@@ -52,6 +52,9 @@ const REGION_CURRENCY: Readonly<Record<string, string>> = {
 
 export function runTimezoneProbe(): LocationSignal {
 	const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+	const resolved = Intl.DateTimeFormat(undefined, {
+		timeZone: timezone,
+	}).resolvedOptions()
 	const countries = countriesFromTimezone(timezone)
 	return makeSignal({
 		id: 'timezone',
@@ -66,7 +69,11 @@ export function runTimezoneProbe(): LocationSignal {
 			timezone,
 			countryCodes: [...countries],
 		},
-		raw: { timeZone: timezone },
+		raw: {
+			timeZone: timezone,
+			hour12: resolved.hour12 ?? null,
+			numberingSystem: resolved.numberingSystem,
+		},
 	})
 }
 

@@ -41,6 +41,15 @@ function expectedOffsetMinutes(
 	}
 }
 
+function readMismatchFlag(raw: unknown): boolean {
+	if (typeof raw !== 'object' || raw === null) {
+		return false
+	}
+	const mismatch: unknown = Reflect.get(raw, 'mismatch')
+	const conflicted: unknown = Reflect.get(raw, 'conflicted')
+	return mismatch === true || conflicted === true
+}
+
 export function runTzOffsetConflictProbe(): LocationSignal {
 	const label = 'Relógio vs fuso IANA'
 	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -98,7 +107,23 @@ export function runIpVsTzProbe(
 		group => group.length > 0,
 	)
 	const intersection = intersectCountryCodes(groups)
-	const conflicted = groups.length >= 2 && intersection.length === 0
+	const regionConflicted = groups.length >= 2 && intersection.length === 0
+
+	const magnetometer = signals.find(signal => signal.id === 'magnetometer')
+	const solar = signals.find(signal => signal.id === 'color_scheme_solar')
+	const magneticConflict =
+		magnetometer?.status === 'ok' && readMismatchFlag(magnetometer.raw)
+	const solarMismatch = solar?.status === 'ok' && readMismatchFlag(solar.raw)
+
+	const conflicted = regionConflicted || magneticConflict || solarMismatch
+
+	const extras: string[] = []
+	if (magneticConflict) {
+		extras.push('campo magnético×IP')
+	}
+	if (solarMismatch) {
+		extras.push('tema×dia solar')
+	}
 
 	return makeSignal({
 		id: 'ip_vs_tz',
@@ -106,7 +131,9 @@ export function runIpVsTzProbe(
 		status: 'ok',
 		confidence: conflicted ? 0.4 : 0.25,
 		summary: conflicted
-			? 'Países sugeridos por IP, fuso e idioma não se intersectam (VPN/proxy?).'
+			? regionConflicted
+				? `Países sugeridos por IP, fuso e idioma não se intersectam${extras.length > 0 ? `; também ${extras.join(' e ')}` : ''} (VPN/proxy?).`
+				: `Indicadores sensoriais em conflito (${extras.join(', ')}).`
 			: intersection.length > 0
 				? `Consenso parcial: ${intersection.join(', ')}.`
 				: 'Sinais insuficientes para cruzar origem.',
@@ -118,6 +145,9 @@ export function runIpVsTzProbe(
 			tzCountries: [...new Set(tzCountries)],
 			localeCountries: [...new Set(localeCountries)],
 			intersection,
+			regionConflicted,
+			magneticConflict,
+			solarMismatch,
 			conflicted,
 		},
 	})

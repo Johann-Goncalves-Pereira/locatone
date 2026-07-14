@@ -13,6 +13,13 @@ describe('region-priors', () => {
 		expect(countriesFromTimezone('Europe/Berlin')).toEqual(['DE'])
 	})
 
+	it('resolves IANA parent prefixes', () => {
+		expect(countriesFromTimezone('America/Argentina/Cordoba')).toEqual(['AR'])
+		expect(countriesFromTimezone('America/Indiana/Indianapolis')).toEqual([
+			'US',
+		])
+	})
+
 	it('maps locales to countries', () => {
 		expect(countriesFromLocale('pt-BR')).toEqual(['BR'])
 		expect(countriesFromLocale('ja-JP')).toEqual(['JP'])

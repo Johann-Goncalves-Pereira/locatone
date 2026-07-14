@@ -58,9 +58,50 @@ const TIMEZONE_COUNTRY: Readonly<Record<string, readonly string[]>> = {
 	'Australia/Sydney': ['AU'],
 	'Australia/Melbourne': ['AU'],
 	'Pacific/Auckland': ['NZ'],
+	'Pacific/Honolulu': ['US'],
+	'America/Halifax': ['CA'],
+	'America/Winnipeg': ['CA'],
+	'America/Edmonton': ['CA'],
+	'America/Detroit': ['US'],
+	'America/Caracas': ['VE'],
+	'America/La_Paz': ['BO'],
+	'America/Asuncion': ['PY'],
+	'America/Montevideo': ['UY'],
+	'America/Guayaquil': ['EC'],
+	'Atlantic/Azores': ['PT'],
+	'Atlantic/Canary': ['ES'],
+	'Europe/Bucharest': ['RO'],
+	'Europe/Budapest': ['HU'],
+	'Europe/Sofia': ['BG'],
+	'Europe/Kiev': ['UA'],
+	'Europe/Kyiv': ['UA'],
+	'Asia/Ho_Chi_Minh': ['VN'],
+	'Asia/Taipei': ['TW'],
+	'Asia/Kathmandu': ['NP'],
+	'Asia/Karachi': ['PK'],
+	'Asia/Dhaka': ['BD'],
+	'Asia/Riyadh': ['SA'],
+	'Asia/Kuwait': ['KW'],
+	'Asia/Qatar': ['QA'],
+	'Australia/Perth': ['AU'],
+	'Australia/Brisbane': ['AU'],
+	'Australia/Adelaide': ['AU'],
+	'Australia/Darwin': ['AU'],
 	'Africa/Johannesburg': ['ZA'],
 	'Africa/Cairo': ['EG'],
 	'Africa/Lagos': ['NG'],
+	'Africa/Nairobi': ['KE'],
+	'Africa/Casablanca': ['MA'],
+}
+
+/** Parent path of IANA zones → country (e.g. America/Argentina/*). */
+const TIMEZONE_PREFIX_COUNTRY: Readonly<Record<string, readonly string[]>> = {
+	'America/Argentina': ['AR'],
+	'America/Indiana': ['US'],
+	'America/Kentucky': ['US'],
+	'America/North_Dakota': ['US'],
+	'America/Brazil': ['BR'],
+	Australia: ['AU'],
 }
 
 const LOCALE_COUNTRY: Readonly<Record<string, readonly string[]>> = {
@@ -200,6 +241,23 @@ export const COUNTRY_CENTROIDS: Readonly<
 	ET: { lat: 9.1, lng: 40.5 },
 	SA: { lat: 23.9, lng: 45.1 },
 	TW: { lat: 23.7, lng: 121.0 },
+	VE: { lat: 6.4, lng: -66.6 },
+	BO: { lat: -16.3, lng: -63.6 },
+	PY: { lat: -23.4, lng: -58.4 },
+	UY: { lat: -32.5, lng: -55.8 },
+	EC: { lat: -1.8, lng: -78.2 },
+	RO: { lat: 45.9, lng: 24.9 },
+	HU: { lat: 47.2, lng: 19.5 },
+	BG: { lat: 42.7, lng: 25.5 },
+	UA: { lat: 48.4, lng: 31.2 },
+	VN: { lat: 14.1, lng: 108.3 },
+	NP: { lat: 28.4, lng: 84.1 },
+	PK: { lat: 30.4, lng: 69.3 },
+	BD: { lat: 23.7, lng: 90.4 },
+	KW: { lat: 29.3, lng: 47.5 },
+	QA: { lat: 25.3, lng: 51.2 },
+	KE: { lat: -0.02, lng: 37.9 },
+	MA: { lat: 31.8, lng: -7.1 },
 }
 
 const GEO_TLDS: Readonly<Record<string, string>> = {
@@ -246,6 +304,22 @@ export function countriesFromTimezone(timezone: string): readonly string[] {
 	const exact = TIMEZONE_COUNTRY[timezone]
 	if (exact !== undefined) {
 		return exact
+	}
+
+	let current = timezone
+	while (current.includes('/')) {
+		const cut = current.lastIndexOf('/')
+		current = current.slice(0, cut)
+		const prefixHit =
+			TIMEZONE_PREFIX_COUNTRY[current] ?? TIMEZONE_COUNTRY[current]
+		if (prefixHit !== undefined) {
+			return prefixHit
+		}
+	}
+
+	const continentHit = TIMEZONE_PREFIX_COUNTRY[timezone]
+	if (continentHit !== undefined) {
+		return continentHit
 	}
 
 	return []
