@@ -1,5 +1,6 @@
 import type { LocationSignal } from '@features/location/api/location.schema'
 import { countriesFromTimezone } from '@features/location/lib/region-priors'
+import { readIndexedStrings } from '@features/location/lib/safe-array'
 import { makeSignal } from '@features/location/probes/signal-helpers'
 
 interface WorkerIntlReply {
@@ -8,19 +9,17 @@ interface WorkerIntlReply {
 	readonly languages: readonly string[]
 }
 
-function isWorkerIntlReply(value: unknown): value is WorkerIntlReply {
+function parseWorkerIntlReply(value: unknown): WorkerIntlReply | undefined {
 	if (typeof value !== 'object' || value === null) {
-		return false
+		return undefined
 	}
 	const timeZone: unknown = Reflect.get(value, 'timeZone')
 	const language: unknown = Reflect.get(value, 'language')
-	const languages: unknown = Reflect.get(value, 'languages')
-	return (
-		typeof timeZone === 'string' &&
-		typeof language === 'string' &&
-		Array.isArray(languages) &&
-		languages.every(item => typeof item === 'string')
-	)
+	if (typeof timeZone !== 'string' || typeof language !== 'string') {
+		return undefined
+	}
+	const languages = readIndexedStrings(Reflect.get(value, 'languages'))
+	return { timeZone, language, languages }
 }
 
 export async function runWorkerIntlProbe(): Promise<LocationSignal> {
@@ -41,7 +40,12 @@ self.onmessage = function () {
   var opts = Intl.DateTimeFormat().resolvedOptions();
   var languages = [];
   try {
-    languages = Array.prototype.slice.call(self.navigator.languages || []);
+    var navLangs = self.navigator.languages;
+    if (navLangs && typeof navLangs.length === 'number') {
+      for (var i = 0; i < navLangs.length; i++) {
+        languages.push(String(navLangs[i]));
+      }
+    }
   } catch (e) {}
   self.postMessage({
     timeZone: opts.timeZone || '',
@@ -52,7 +56,10 @@ self.onmessage = function () {
 `
 	let objectUrl: string | undefined
 	try {
-		const blob = new Blob([source], { type: 'text/javascript' })
+		const parts: string[] = []
+		parts.push(source)
+		// Omit BlobPropertyBagDictionary — Firefox Xray + patched Blob can deny `endings`.
+		const blob = new Blob(parts)
 		const createdUrl = URL.createObjectURL(blob)
 		objectUrl = createdUrl
 		const reply = await new Promise<WorkerIntlReply>((resolve, reject) => {
@@ -64,8 +71,9 @@ self.onmessage = function () {
 			worker.onmessage = (event: MessageEvent<unknown>) => {
 				globalThis.clearTimeout(timer)
 				worker.terminate()
-				if (isWorkerIntlReply(event.data)) {
-					resolve(event.data)
+				const parsed = parseWorkerIntlReply(event.data)
+				if (parsed !== undefined) {
+					resolve(parsed)
 					return
 				}
 				reject(new Error('Worker Intl reply inválida'))

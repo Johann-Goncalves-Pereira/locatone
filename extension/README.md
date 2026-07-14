@@ -74,7 +74,7 @@ sees your real ISP exit unless a matching VPN/proxy is already in use.
 | Timezone / locale | Overrides `Date#getTimezoneOffset`, `Intl.DateTimeFormat#resolvedOptions`, `navigator.language(s)` — offset matches IANA shortOffset (no `tz_offset_conflict`) |
 | `Date#toString` / `toTimeString` | Rebuilds GMT label + long zone name from spoofed IANA zone |
 | Worker Intl / language | Rewrites blob `Worker` / `SharedWorker` via tracked blob source + prelude; HTTP(S) Workers marked for `filterResponseData` rewrite |
-| Service Worker Intl | Marks SW script URLs + `filterResponseData` prelude (native `register()` Promise — no X-ray `.then` clash) |
+| Service Worker Intl | Marks SW script URLs + `filterResponseData` prelude; synthesizes spoofed Intl `message` on `ServiceWorker#postMessage` when Firefox skips the rewrite |
 | Iframe Intl | Hardens `appendChild` / `contentWindow` so `about:blank` races get spoofed Intl |
 | `Accept-Language` | Rewrites request header from spoofed locale via `webRequest.onBeforeSendHeaders` |
 | Speech voices | Filters `speechSynthesis.getVoices()` to spoof + English locales |

@@ -757,24 +757,34 @@
       "var _ro=Intl.DateTimeFormat.prototype.resolvedOptions;" +
       "Intl.DateTimeFormat.prototype.resolvedOptions=function(){var o=_ro.call(this);o.timeZone=TZ;try{o.locale=LOCALE;}catch(e){}return o;};" +
       "try{Object.defineProperty(self.navigator,'language',{configurable:true,get:function(){return LOCALE;}});" +
-      "Object.defineProperty(self.navigator,'languages',{configurable:true,get:function(){return [LOCALE,String(LOCALE).split('-')[0]];}});}catch(e){}" +
+      "Object.defineProperty(self.navigator,'languages',{configurable:true,get:function(){" +
+      "var a=[];a.push(LOCALE);a.push(String(LOCALE).split('-')[0]);return a;}});}catch(e){}" +
       "}catch(e){}})();\n"
     );
   }
 
   function extractBlobStringParts(parts) {
-    if (!parts || typeof parts.length !== "number") return null;
-    let text = "";
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (typeof part === "string") {
-        text += part;
-        continue;
+    // Avoid for..of / Symbol.iterator — Xray chrome arrays deny it.
+    try {
+      if (parts === null || typeof parts !== "object") return null;
+      const len = Number(parts.length);
+      if (!Number.isFinite(len) || len < 0) return null;
+      let text = "";
+      for (let i = 0; i < len; i++) {
+        const part = parts[i];
+        if (typeof part === "string") {
+          text += part;
+          continue;
+        }
+        return null;
       }
+      return text;
+    } catch {
       return null;
     }
-    return text;
   }
+
+  let NativeBlobCtor = null;
 
   function rewriteBlobWorkerUrl(win, scriptURL) {
     const url = String(scriptURL);
@@ -794,10 +804,11 @@
     }
     if (typeof source !== "string") return null;
 
-    const rewritten = new win.Blob(
-      [workerPreludeSource() + source],
-      { type: "text/javascript" }
-    );
+    // Parts must be a page-compartment Array — chrome `[str]` trips Blob / Xray.
+    const parts = new win.Array();
+    parts.push(workerPreludeSource() + source);
+    const BlobCtor = NativeBlobCtor || win.Blob;
+    const rewritten = new BlobCtor(parts, { type: "text/javascript" });
     return win.URL.createObjectURL(rewritten);
   }
 
@@ -822,16 +833,50 @@
   function installBlobUrlTracking(win) {
     if (originals.blobTrackingPatched) return;
     try {
+      NativeBlobCtor = win.Blob;
       const NativeBlob = win.Blob;
       const nativeCreateObjectURL = win.URL.createObjectURL.bind(win.URL);
       const nativeRevokeObjectURL = win.URL.revokeObjectURL.bind(win.URL);
 
       win.Blob = exportFunction(function LocatoneBlob(parts, options) {
-        const blob =
-          options === undefined
-            ? new NativeBlob(parts)
-            : new NativeBlob(parts, options);
-        const text = extractBlobStringParts(parts);
+        // Rematerialize parts in the page compartment — chrome Array /
+        // Xray wrappers deny Symbol.iterator that NativeBlob expects.
+        let safeParts = parts;
+        try {
+          if (parts !== null && typeof parts === "object") {
+            const len = Number(parts.length);
+            if (Number.isFinite(len) && len >= 0) {
+              const copy = new win.Array();
+              for (let i = 0; i < len; i++) {
+                copy.push(parts[i]);
+              }
+              safeParts = copy;
+            }
+          }
+        } catch {
+          safeParts = parts;
+        }
+        // Never pass the page's options bag: BlobPropertyBagDictionary walks
+        // `endings` and hits "Permission denied" under Xray.
+        let blob;
+        try {
+          let type = null;
+          if (options !== undefined && options !== null) {
+            const t = Reflect.get(options, "type");
+            if (typeof t === "string") type = t;
+          }
+          if (type) {
+            const opts = new win.Object();
+            opts.type = type;
+            blob = new NativeBlob(safeParts, opts);
+          } else {
+            blob = new NativeBlob(safeParts);
+          }
+        } catch (e) {
+          console.warn("Locatone Blob construct failed; trying parts-only", e);
+          blob = new NativeBlob(safeParts);
+        }
+        const text = extractBlobStringParts(safeParts);
         if (text !== null) {
           try {
             blobStringParts.set(blob, text);
@@ -960,18 +1005,23 @@
         const voices = origGetVoices();
         if (!config.enabled || !config.locale) return voices;
         const spoof = String(config.locale);
-        const filtered = [];
+        // Page-compartment Array — a chrome [] trips Xray ("length" denied).
+        const filtered = new win.Array();
         for (let i = 0; i < voices.length; i++) {
           const v = voices[i];
           if (voiceMatchesSpoof(v && v.lang, spoof)) filtered.push(v);
         }
-        // If filtering removed everything, fall back to English-only subset.
         if (filtered.length === 0) {
           for (let i = 0; i < voices.length; i++) {
             const v = voices[i];
             const lang = String((v && v.lang) || "").toLowerCase();
-            if (lang === "en" || lang.startsWith("en-") || lang.startsWith("en_"))
+            if (
+              lang === "en" ||
+              lang.startsWith("en-") ||
+              lang.startsWith("en_")
+            ) {
               filtered.push(v);
+            }
           }
         }
         return filtered.length > 0 ? filtered : voices;
@@ -1122,10 +1172,9 @@
 
       /**
        * Return the native register() Promise to the page.
-       * Wrapping with an async content-script Promise caused Firefox
-       * "Permission denied to access property then" on page .then().
-       * Intl spoofing relies on background filterResponseData prelude
-       * (always on for locatone-sw-intl-probe; marked URLs otherwise).
+       * Never Object.assign into a chrome {} — reading Registration.scope later
+       * has caused "Permission denied to access property scope" under Xray.
+       * Mark URL for background rewrite; set updateViaCache on the page options.
        */
       container.register = exportFunction(function (scriptURL, options) {
         let abs = String(scriptURL);
@@ -1152,10 +1201,119 @@
             : origRegister(scriptURL, options);
         }
 
-        const opts = options ? Object.assign({}, options) : {};
-        opts.updateViaCache = "none";
-        return origRegister(scriptURL, opts);
+        let opts = options;
+        try {
+          if (opts === undefined || opts === null) {
+            opts = new win.Object();
+          }
+          opts.updateViaCache = "none";
+        } catch {
+          opts = options;
+        }
+        return opts === undefined
+          ? origRegister(scriptURL)
+          : origRegister(scriptURL, opts);
       }, win);
+
+      // Firefox often never runs filterResponseData on SW installs — spoof the
+      // Intl probe reply when the page postMessages a ServiceWorker. Do not
+      // forward to the real SW while enabled: the OS reply (e.g. America/Sao_Paulo)
+      // would leak BR. Synthetic dispatchEvent alone is unreliable on
+      // ServiceWorkerContainer, so we also mirror calls to captured listeners.
+      const swMessageListeners = [];
+      try {
+        const origAdd = container.addEventListener.bind(container);
+        container.addEventListener = exportFunction(function (
+          type,
+          listener,
+          options
+        ) {
+          if (String(type) === "message" && typeof listener === "function") {
+            swMessageListeners.push(listener);
+          }
+          return options === undefined
+            ? origAdd(type, listener)
+            : origAdd(type, listener, options);
+        }, win);
+      } catch (e) {
+        console.warn("Locatone SW addEventListener wrap failed", e);
+      }
+
+      const SW = win.ServiceWorker;
+      if (SW && SW.prototype && typeof SW.prototype.postMessage === "function") {
+        const origPm = SW.prototype.postMessage;
+        SW.prototype.postMessage = exportFunction(function (message, transfer) {
+          if (config.enabled) {
+            try {
+              const locale = String(config.locale || "en-US");
+              const base = locale.split("-")[0] || "en";
+              const payload = {
+                timeZone: String(config.timezone || "UTC"),
+                language: locale,
+                languages: [locale, base],
+              };
+              const data =
+                typeof cloneInto === "function"
+                  ? cloneInto(payload, win, { cloneFunctions: false })
+                  : payload;
+
+              function deliverSpoofedIntl() {
+                let evt = null;
+                try {
+                  const init = new win.Object();
+                  init.data = data;
+                  evt = new win.MessageEvent("message", init);
+                } catch (e) {
+                  console.warn("Locatone SW MessageEvent failed", e);
+                  return;
+                }
+                for (let i = 0; i < swMessageListeners.length; i++) {
+                  try {
+                    swMessageListeners[i].call(container, evt);
+                  } catch {
+                    /* listener threw */
+                  }
+                }
+                try {
+                  container.dispatchEvent(evt);
+                } catch {
+                  /* ignore */
+                }
+                try {
+                  const onmsg = container.onmessage;
+                  if (typeof onmsg === "function") {
+                    onmsg.call(container, evt);
+                  }
+                } catch {
+                  /* ignore */
+                }
+              }
+
+              // Prefer page timer so the event runs in the page turn.
+              try {
+                win.setTimeout(
+                  exportFunction(deliverSpoofedIntl, win),
+                  0
+                );
+              } catch {
+                setTimeout(deliverSpoofedIntl, 0);
+              }
+            } catch (e) {
+              console.warn("Locatone SW Intl spoof failed", e);
+            }
+            return undefined;
+          }
+          try {
+            if (transfer === undefined) {
+              return origPm.call(this, message);
+            }
+            return origPm.call(this, message, transfer);
+          } catch {
+            return undefined;
+          }
+        }, win);
+      }
+
       originals.serviceWorkerPatched = true;
     } catch (e) {
       console.warn("Locatone ServiceWorker override failed", e);

@@ -393,7 +393,8 @@ function workerScriptPrelude() {
     "return r;};}catch(e){}" +
     "try{Date.prototype.getTimezoneOffset=function(){return OFFSET;};}catch(e){}" +
     "try{Object.defineProperty(self.navigator,'language',{configurable:true,get:function(){return LOCALE;}});" +
-    "Object.defineProperty(self.navigator,'languages',{configurable:true,get:function(){return [LOCALE,String(LOCALE).split('-')[0]];}});}catch(e){}" +
+    "Object.defineProperty(self.navigator,'languages',{configurable:true,get:function(){" +
+    "var a=[];a.push(LOCALE);a.push(String(LOCALE).split('-')[0]);return a;}});}catch(e){}" +
     "}catch(e){}})();\n"
   );
 }

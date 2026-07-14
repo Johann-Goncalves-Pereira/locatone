@@ -3,6 +3,7 @@ import {
 	countriesFromLocale,
 	countriesFromTimezone,
 } from '@features/location/lib/region-priors'
+import { readIndexedStrings } from '@features/location/lib/safe-array'
 import { makeSignal } from '@features/location/probes/signal-helpers'
 
 interface SwIntlReply {
@@ -11,19 +12,81 @@ interface SwIntlReply {
 	readonly languages: readonly string[]
 }
 
-function isSwIntlReply(value: unknown): value is SwIntlReply {
+function parseSwIntlReply(value: unknown): SwIntlReply | undefined {
 	if (typeof value !== 'object' || value === null) {
-		return false
+		return undefined
 	}
 	const timeZone: unknown = Reflect.get(value, 'timeZone')
 	const language: unknown = Reflect.get(value, 'language')
-	const languages: unknown = Reflect.get(value, 'languages')
+	if (typeof timeZone !== 'string' || typeof language !== 'string') {
+		return undefined
+	}
+	return {
+		timeZone,
+		language,
+		languages: readIndexedStrings(Reflect.get(value, 'languages')),
+	}
+}
+
+interface SwWorkerLike {
+	readonly postMessage: (message: unknown) => void
+	readonly addEventListener: (type: 'statechange', listener: () => void) => void
+}
+
+function isSwWorkerLike(value: unknown): value is SwWorkerLike {
+	if (typeof value !== 'object' || value === null) {
+		return false
+	}
 	return (
-		typeof timeZone === 'string' &&
-		typeof language === 'string' &&
-		Array.isArray(languages) &&
-		languages.every(item => typeof item === 'string')
+		typeof Reflect.get(value, 'postMessage') === 'function' &&
+		typeof Reflect.get(value, 'addEventListener') === 'function'
 	)
+}
+
+function readRegistrationWorker(
+	registration: ServiceWorkerRegistration,
+): SwWorkerLike | null {
+	try {
+		const active: unknown = Reflect.get(registration, 'active')
+		if (isSwWorkerLike(active)) {
+			return active
+		}
+		const installing: unknown = Reflect.get(registration, 'installing')
+		if (isSwWorkerLike(installing)) {
+			return installing
+		}
+		const waiting: unknown = Reflect.get(registration, 'waiting')
+		if (isSwWorkerLike(waiting)) {
+			return waiting
+		}
+	} catch {
+		return null
+	}
+	return null
+}
+
+function readWorkerScriptUrl(
+	reg: ServiceWorkerRegistration,
+): string | undefined {
+	try {
+		const active: unknown = Reflect.get(reg, 'active')
+		if (typeof active === 'object' && active !== null) {
+			const url: unknown = Reflect.get(active, 'scriptURL')
+			if (typeof url === 'string') {
+				return url
+			}
+		}
+		const installing: unknown = Reflect.get(reg, 'installing')
+		if (typeof installing === 'object' && installing !== null) {
+			const url: unknown = Reflect.get(installing, 'scriptURL')
+			if (typeof url === 'string') {
+				return url
+			}
+		}
+	} catch {
+		return undefined
+	}
+	return undefined
 }
 
 const SW_SCRIPT_URL = '/locatone-sw-intl-probe.js'
@@ -33,18 +96,22 @@ async function unregisterProbeWorkers(): Promise<void> {
 	if (!('serviceWorker' in navigator)) {
 		return
 	}
-	const regs = await navigator.serviceWorker.getRegistrations()
-	await Promise.all(
-		regs
-			.filter(reg => {
-				const script = reg.active?.scriptURL ?? reg.installing?.scriptURL
-				return (
-					typeof script === 'string' &&
-					script.includes('locatone-sw-intl-probe')
-				)
-			})
-			.map(reg => reg.unregister()),
-	)
+	try {
+		const regs = await navigator.serviceWorker.getRegistrations()
+		await Promise.all(
+			regs
+				.filter(reg => {
+					const script = readWorkerScriptUrl(reg)
+					return (
+						typeof script === 'string' &&
+						script.includes('locatone-sw-intl-probe')
+					)
+				})
+				.map(reg => reg.unregister()),
+		)
+	} catch {
+		/* Xray / permission — ignore cleanup */
+	}
 }
 
 export async function runServiceWorkerIntlProbe(): Promise<LocationSignal> {
@@ -67,8 +134,7 @@ export async function runServiceWorkerIntlProbe(): Promise<LocationSignal> {
 			scope: SW_SCOPE,
 		})
 
-		const worker =
-			registration.active ?? registration.installing ?? registration.waiting
+		const worker = readRegistrationWorker(registration)
 		if (worker === null) {
 			return makeSignal({
 				id: 'service_worker_intl',
@@ -86,26 +152,48 @@ export async function runServiceWorkerIntlProbe(): Promise<LocationSignal> {
 			}, 3_000)
 
 			function onMessage(event: MessageEvent<unknown>) {
-				if (!isSwIntlReply(event.data)) {
+				const parsed = parseSwIntlReply(event.data)
+				if (parsed === undefined) {
 					return
 				}
 				globalThis.clearTimeout(timer)
 				navigator.serviceWorker.removeEventListener('message', onMessage)
-				resolve(event.data)
+				resolve(parsed)
 			}
 
 			navigator.serviceWorker.addEventListener('message', onMessage)
 
 			const deliver = () => {
-				worker.postMessage('probe')
+				try {
+					worker.postMessage('probe')
+				} catch (error) {
+					globalThis.clearTimeout(timer)
+					navigator.serviceWorker.removeEventListener('message', onMessage)
+					reject(
+						error instanceof Error ? error : new Error('SW postMessage failed'),
+					)
+				}
 			}
 
-			if (worker.state === 'activated') {
+			let state = ''
+			try {
+				const stateUnknown: unknown = Reflect.get(worker, 'state')
+				state = typeof stateUnknown === 'string' ? stateUnknown : ''
+			} catch {
+				state = ''
+			}
+
+			if (state === 'activated') {
 				deliver()
 			} else {
 				worker.addEventListener('statechange', () => {
-					if (worker.state === 'activated') {
-						deliver()
+					try {
+						const next: unknown = Reflect.get(worker, 'state')
+						if (next === 'activated') {
+							deliver()
+						}
+					} catch {
+						/* ignore */
 					}
 				})
 			}

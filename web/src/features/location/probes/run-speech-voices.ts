@@ -1,5 +1,9 @@
 import type { LocationSignal } from '@features/location/api/location.schema'
 import { countriesFromLocale } from '@features/location/lib/region-priors'
+import {
+	readArrayLength,
+	readIndexedUnknown,
+} from '@features/location/lib/safe-array'
 import { makeSignal } from '@features/location/probes/signal-helpers'
 
 interface VoiceSample {
@@ -9,28 +13,57 @@ interface VoiceSample {
 	readonly default: boolean
 }
 
-function sampleVoices(voices: readonly SpeechSynthesisVoice[]): {
+function readVoiceField(voice: unknown, key: string): unknown {
+	if (typeof voice !== 'object' || voice === null) {
+		return undefined
+	}
+	try {
+		return Reflect.get(voice, key)
+	} catch {
+		return undefined
+	}
+}
+
+function sampleVoices(voices: unknown): {
 	readonly samples: readonly VoiceSample[]
 	readonly langs: readonly string[]
 	readonly countryCodes: readonly string[]
+	readonly voiceCount: number
 } {
-	const samples = voices.slice(0, 40).map(voice => ({
-		name: voice.name,
-		lang: voice.lang,
-		localService: voice.localService,
-		default: voice.default,
-	}))
-	const langs = [...new Set(voices.map(voice => voice.lang).filter(Boolean))]
+	const items = readIndexedUnknown(voices)
+	const samples: VoiceSample[] = []
+	const langs: string[] = []
+	for (const voice of items.slice(0, 40)) {
+		const name = readVoiceField(voice, 'name')
+		const lang = readVoiceField(voice, 'lang')
+		const localService = readVoiceField(voice, 'localService')
+		const isDefault = readVoiceField(voice, 'default')
+		if (typeof lang === 'string' && lang.length > 0) {
+			langs.push(lang)
+		}
+		samples.push({
+			name: typeof name === 'string' ? name : '',
+			lang: typeof lang === 'string' ? lang : '',
+			localService: localService === true,
+			default: isDefault === true,
+		})
+	}
+	const uniqueLangs = [...new Set(langs)]
 	const countryCodes = [
-		...new Set(langs.flatMap(lang => [...countriesFromLocale(lang)])),
+		...new Set(uniqueLangs.flatMap(lang => [...countriesFromLocale(lang)])),
 	]
-	return { samples, langs, countryCodes }
+	return {
+		samples,
+		langs: uniqueLangs,
+		countryCodes,
+		voiceCount: readArrayLength(voices),
+	}
 }
 
-function waitForVoices(): Promise<readonly SpeechSynthesisVoice[]> {
+function waitForVoices(): Promise<unknown> {
 	const synth = window.speechSynthesis
 	const existing = synth.getVoices()
-	if (existing.length > 0) {
+	if (readArrayLength(existing) > 0) {
 		return Promise.resolve(existing)
 	}
 	return new Promise(resolve => {
@@ -62,7 +95,8 @@ export async function runSpeechVoicesProbe(): Promise<LocationSignal> {
 
 	try {
 		const voices = await waitForVoices()
-		if (voices.length === 0) {
+		const { samples, langs, countryCodes, voiceCount } = sampleVoices(voices)
+		if (voiceCount === 0) {
 			return makeSignal({
 				id: 'speech_voices',
 				label,
@@ -73,7 +107,6 @@ export async function runSpeechVoicesProbe(): Promise<LocationSignal> {
 			})
 		}
 
-		const { samples, langs, countryCodes } = sampleVoices(voices)
 		const hasPtBr = langs.some(
 			lang =>
 				lang.toLowerCase() === 'pt-br' ||
@@ -91,18 +124,18 @@ export async function runSpeechVoicesProbe(): Promise<LocationSignal> {
 			status: 'ok',
 			confidence: hasPtBr ? 0.6 : countryCodes.length > 0 ? 0.35 : 0.15,
 			summary: hasPtBr
-				? `Vozes pt-BR detectadas (${String(voices.length)} vozes); prior BR forte.`
+				? `Vozes pt-BR detectadas (${String(voiceCount)} vozes); prior BR forte.`
 				: hasEt
-					? `Vozes estonianas presentes (${String(voices.length)} vozes).`
+					? `Vozes estonianas presentes (${String(voiceCount)} vozes).`
 					: countryCodes.length > 0
-						? `Vozes sugerem ${countryCodes.join(', ')} (${String(voices.length)} vozes).`
-						: `${String(voices.length)} vozes sem prior regional claro.`,
+						? `Vozes sugerem ${countryCodes.join(', ')} (${String(voiceCount)} vozes).`
+						: `${String(voiceCount)} vozes sem prior regional claro.`,
 			regionHints: {
 				languages: [...langs],
 				countryCodes,
 			},
 			raw: {
-				voiceCount: voices.length,
+				voiceCount,
 				langs,
 				hasPtBr,
 				hasEt,
