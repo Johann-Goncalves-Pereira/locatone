@@ -20,7 +20,8 @@ export function SignalCard({
 	placeholder = false,
 	onToggle,
 }: SignalCardProps) {
-	const blocked = signal.status === 'denied'
+	const blocked =
+		signal.status === 'denied' || signal.status === 'error'
 	const color = blocked ? BLOCKED_COLOR : probeColor(signal.id)
 	const badge = placeholder ? '…' : signalBadgeLabel(signal)
 

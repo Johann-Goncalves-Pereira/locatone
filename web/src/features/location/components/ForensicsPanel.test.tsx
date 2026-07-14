@@ -135,6 +135,35 @@ describe('ForensicsPanel', () => {
 		expect(blockedLabel.className).toContain('text-rose-500')
 	})
 
+	it('styles error signals like denied', () => {
+		renderWithProviders(
+			<ForensicsPanel
+				open
+				isCollecting={false}
+				selectedSignalIds={[]}
+				onToggleSignal={() => undefined}
+				onToggle={() => undefined}
+				signals={[
+					{
+						id: 'ip_ipwho',
+						label: 'IP (ipwho.is)',
+						status: 'error',
+						confidence: 0,
+						summary: 'Falha ao consultar ipwho.is',
+						raw: { error: 'network' },
+						collectedAt: '2026-01-01T00:00:00.000Z',
+					},
+				]}
+			/>,
+		)
+
+		const errorLabel = screen.getByText('IP (ipwho.is)')
+		expect(errorLabel.className).toContain('line-through')
+		expect(errorLabel.className).toContain('text-rose-500')
+		const card = screen.getByRole('button', { name: /IP \(ipwho\.is\)/i })
+		expect(card.className).toContain('border-rose-500/40')
+	})
+
 	it('keeps multiple signal cards expanded at once', async () => {
 		const user = userEvent.setup()
 
