@@ -2,7 +2,8 @@
 "use strict";
 
 /**
- * Fake response bodies for common client-side IP geolocation APIs.
+ * Fake response bodies for common client-side IP geolocation APIs
+ * and Cloudflare /cdn-cgi/trace.
  */
 const LocatoneIpMock = (() => {
   const HOST_PATTERNS = [
@@ -20,6 +21,42 @@ const LocatoneIpMock = (() => {
     { host: /ipgeolocation\.io$/i, kind: "ipgeolocation" },
   ];
 
+  /** Plausible Cloudflare colo codes by ISO country. */
+  const COLO_BY_COUNTRY = {
+    EE: "TLL",
+    FI: "HEL",
+    LV: "RIX",
+    LT: "VNO",
+    SE: "ARN",
+    NO: "OSL",
+    DK: "CPH",
+    DE: "FRA",
+    FR: "CDG",
+    GB: "LHR",
+    IE: "DUB",
+    NL: "AMS",
+    BE: "BRU",
+    ES: "MAD",
+    PT: "LIS",
+    IT: "MXP",
+    CH: "ZRH",
+    AT: "VIE",
+    PL: "WAW",
+    US: "SJC",
+    CA: "YYZ",
+    BR: "GRU",
+    AR: "EZE",
+    JP: "NRT",
+    KR: "ICN",
+    CN: "HKG",
+    AU: "SYD",
+    NZ: "AKL",
+    IN: "BOM",
+    SG: "SIN",
+    AE: "DXB",
+    ZA: "JNB",
+  };
+
   function matchKind(url) {
     let u;
     try {
@@ -27,14 +64,21 @@ const LocatoneIpMock = (() => {
     } catch {
       return null;
     }
+    if (
+      /(?:^|\.)cloudflare\.com$/i.test(u.hostname) &&
+      /\/cdn-cgi\/trace\/?$/i.test(u.pathname)
+    ) {
+      return { kind: "cloudflare_trace", url: u, contentType: "text/plain" };
+    }
     for (const p of HOST_PATTERNS) {
-      if (p.host.test(u.hostname)) return { kind: p.kind, url: u };
+      if (p.host.test(u.hostname)) {
+        return { kind: p.kind, url: u, contentType: "application/json" };
+      }
     }
     return null;
   }
 
   function fakeIp() {
-    // Private-looking placeholder; sites usually display geo fields, not validate IP.
     return "203.0.113.42";
   }
 
@@ -58,7 +102,35 @@ const LocatoneIpMock = (() => {
     };
   }
 
+  function cloudflareTraceBody(cfg) {
+    const h = hintsFromConfig(cfg);
+    const colo = COLO_BY_COUNTRY[h.country] || "SJC";
+    const lines = [
+      "fl=locatone1",
+      "h=www.cloudflare.com",
+      "ip=" + h.ip,
+      "ts=" + (Date.now() / 1000).toFixed(3),
+      "visit_scheme=https",
+      "uag=Mozilla/5.0",
+      "colo=" + colo,
+      "sliver=none",
+      "http=http/2",
+      "loc=" + h.country,
+      "tls=TLSv1.3",
+      "sni=plaintext",
+      "warp=off",
+      "gateway=off",
+      "rbi=off",
+      "kex=X25519",
+    ];
+    return lines.join("\n") + "\n";
+  }
+
   function bodyFor(kind, cfg) {
+    if (kind === "cloudflare_trace") {
+      return cloudflareTraceBody(cfg);
+    }
+
     const h = hintsFromConfig(cfg);
     switch (kind) {
       case "ipinfo":
@@ -219,6 +291,27 @@ const LocatoneIpMock = (() => {
     }
   }
 
+  function contentTypeFor(kind) {
+    if (kind === "cloudflare_trace") {
+      return "text/plain; charset=utf-8";
+    }
+    return "application/json; charset=utf-8";
+  }
+
+  function sanitizeResponseHeaders(responseHeaders, kind) {
+    const drop = new Set([
+      "content-type",
+      "content-length",
+      "content-encoding",
+      "transfer-encoding",
+    ]);
+    const headers = (responseHeaders || []).filter(
+      (h) => !drop.has(h.name.toLowerCase())
+    );
+    headers.push({ name: "Content-Type", value: contentTypeFor(kind) });
+    return headers;
+  }
+
   function urlsForListener() {
     return [
       "*://ipinfo.io/*",
@@ -241,10 +334,36 @@ const LocatoneIpMock = (() => {
       "*://*.geolocation-db.com/*",
       "*://api.db-ip.com/*",
       "*://api.ipgeolocation.io/*",
+      "*://cloudflare.com/*",
+      "*://*.cloudflare.com/*",
     ];
   }
 
-  return { matchKind, bodyFor, urlsForListener, hintsFromConfig };
+  /** Landmark hosts used by ./web RTT lateration — cancel while spoofing. */
+  function rttCancelUrls() {
+    return [
+      "*://www.gov.br/*",
+      "*://gov.br/*",
+      "*://www.nasa.gov/*",
+      "*://nasa.gov/*",
+      "*://www.bund.de/*",
+      "*://bund.de/*",
+      "*://www.digital.go.jp/*",
+      "*://digital.go.jp/*",
+      "*://www.gov.uk/*",
+      "*://gov.uk/*",
+    ];
+  }
+
+  return {
+    matchKind,
+    bodyFor,
+    contentTypeFor,
+    sanitizeResponseHeaders,
+    urlsForListener,
+    rttCancelUrls,
+    hintsFromConfig,
+  };
 })();
 
 if (typeof window !== "undefined") {

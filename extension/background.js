@@ -31,6 +31,7 @@ async function loadState() {
     };
   }
   await applyProxy();
+  await applyWebRtcPrivacy();
 }
 
 async function saveState(partial) {
@@ -41,6 +42,7 @@ async function saveState(partial) {
   };
   await browser.storage.local.set({ locatone: state });
   await applyProxy();
+  await applyWebRtcPrivacy();
   return state;
 }
 
@@ -67,6 +69,31 @@ async function applyProxy() {
     }
   } catch (err) {
     console.warn("Locatone proxy setup failed:", err);
+  }
+}
+
+/**
+ * Prefer privacy API for WebRTC IP handling — content-script constructor
+ * wrapping is fragile because exportFunction cannot be used as `new`.
+ * disable_non_proxied_udp blocks STUN srflx without a matching proxy.
+ */
+async function applyWebRtcPrivacy() {
+  try {
+    if (
+      !browser.privacy ||
+      !browser.privacy.network ||
+      !browser.privacy.network.webRTCIPHandlingPolicy
+    ) {
+      return;
+    }
+    const api = browser.privacy.network.webRTCIPHandlingPolicy;
+    if (state.enabled && state.lat != null) {
+      await api.set({ value: "disable_non_proxied_udp" });
+    } else {
+      await api.clear({});
+    }
+  } catch (err) {
+    console.warn("Locatone WebRTC privacy policy failed:", err);
   }
 }
 
@@ -186,7 +213,7 @@ async function resolveInput(input) {
   return enriched;
 }
 
-// --- IP API response rewriting ---
+// --- IP API / Cloudflare trace response rewriting ---
 function onIpHeaders(details) {
   if (!state.enabled || state.lat == null) return {};
 
@@ -196,7 +223,7 @@ function onIpHeaders(details) {
   const filter = browser.webRequest.filterResponseData(details.requestId);
   const encoder = new TextEncoder();
 
-  // Discard real body; write spoofed JSON
+  // Discard real body (possibly gzipped); write uncompressed spoofed body.
   filter.ondata = () => {};
   filter.onstop = () => {
     try {
@@ -208,12 +235,17 @@ function onIpHeaders(details) {
     filter.close();
   };
 
-  // Force JSON content-type
-  const headers = (details.responseHeaders || []).filter(
-    (h) => h.name.toLowerCase() !== "content-type" && h.name.toLowerCase() !== "content-length"
-  );
-  headers.push({ name: "Content-Type", value: "application/json; charset=utf-8" });
-  return { responseHeaders: headers };
+  return {
+    responseHeaders: LocatoneIpMock.sanitizeResponseHeaders(
+      details.responseHeaders,
+      match.kind
+    ),
+  };
+}
+
+function onRttLandmark(details) {
+  if (!state.enabled || state.lat == null) return {};
+  return { cancel: true };
 }
 
 function setupIpRewrite() {
@@ -225,6 +257,18 @@ function setupIpRewrite() {
     onIpHeaders,
     { urls },
     ["blocking", "responseHeaders"]
+  );
+}
+
+function setupRttCancel() {
+  const urls = LocatoneIpMock.rttCancelUrls();
+  if (browser.webRequest.onBeforeRequest.hasListener(onRttLandmark)) {
+    browser.webRequest.onBeforeRequest.removeListener(onRttLandmark);
+  }
+  browser.webRequest.onBeforeRequest.addListener(
+    onRttLandmark,
+    { urls },
+    ["blocking"]
   );
 }
 
@@ -263,7 +307,10 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 });
 
-loadState().then(setupIpRewrite);
+loadState().then(() => {
+  setupIpRewrite();
+  setupRttCancel();
+});
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.locatone) {
     state = {
@@ -275,5 +322,6 @@ browser.storage.onChanged.addListener((changes, area) => {
       },
     };
     applyProxy();
+    applyWebRtcPrivacy();
   }
 });

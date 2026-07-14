@@ -149,26 +149,38 @@ const LocatoneTZ = (() => {
   }
 
   /**
+   * Parse IANA short/long offset label → minutes east of UTC (web probe convention).
+   */
+  function parseGmtOffsetMinutesEast(label) {
+    if (!label || typeof label !== "string") return null;
+    if (label === "GMT" || label === "UTC") return 0;
+    const match = /(?:GMT|UTC)?([+-])(\d{1,2})(?::?(\d{2}))?/.exec(label);
+    if (!match) return null;
+    const sign = match[1] === "-" ? -1 : 1;
+    const hours = parseInt(match[2], 10);
+    const mins = match[3] ? parseInt(match[3], 10) : 0;
+    return sign * (hours * 60 + mins);
+  }
+
+  /**
    * Minutes to add to local time to get UTC (same sign as Date#getTimezoneOffset).
-   * Uses Intl when available for DST-correct values.
+   * Prefers shortOffset so it matches ./web tz_offset_conflict expectations.
    */
   function getTimezoneOffsetMinutes(timezone, date = new Date()) {
     try {
-      const dtf = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        timeZoneName: "longOffset",
-      });
-      const parts = dtf.formatToParts(date);
-      const tzName = parts.find((p) => p.type === "timeZoneName");
-      if (tzName && /GMT|UTC/.test(tzName.value)) {
-        const m = tzName.value.match(/([+-])(\d{1,2})(?::?(\d{2}))?/);
-        if (m) {
-          const sign = m[1] === "-" ? 1 : -1; // getTimezoneOffset: west positive
-          const hours = parseInt(m[2], 10);
-          const mins = m[3] ? parseInt(m[3], 10) : 0;
-          return sign * (hours * 60 + mins);
+      for (const timeZoneName of ["shortOffset", "longOffset"]) {
+        const dtf = new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          timeZoneName,
+        });
+        const parts = dtf.formatToParts(date);
+        const tzName = parts.find((p) => p.type === "timeZoneName");
+        if (!tzName) continue;
+        const east = parseGmtOffsetMinutesEast(tzName.value);
+        if (east !== null) {
+          // getTimezoneOffset: west of UTC is positive
+          return -east;
         }
-        if (/GMT|UTC/.test(tzName.value) && !/[+-]/.test(tzName.value)) return 0;
       }
     } catch {
       /* fall through */
@@ -288,7 +300,13 @@ const LocatoneTZ = (() => {
     };
   }
 
-  return { fromCoords, getTimezoneOffsetMinutes, geoHints, ZONES };
+  return {
+    fromCoords,
+    getTimezoneOffsetMinutes,
+    parseGmtOffsetMinutesEast,
+    geoHints,
+    ZONES,
+  };
 })();
 
 if (typeof window !== "undefined") {

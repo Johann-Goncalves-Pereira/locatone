@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "Locatone",
   "version": "1.0.0",
-  "description": "Spoof browser geolocation, timezone, locale, and client-side IP geo lookups — with optional proxy for real IP matching.",
+  "description": "Spoof browser geolocation, timezone, locale, WebRTC ICE, and client-side IP geo lookups — with optional proxy for real IP matching.",
   "icons": {
     "48": "icons/icon-48.png",
     "96": "icons/icon-96.png"
@@ -27,7 +27,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/content.js"],
+      "js": ["lib/timezone.js", "content/content.js"],
       "run_at": "document_start",
       "all_frames": true
     }
@@ -35,6 +35,7 @@
   "permissions": [
     "storage",
     "proxy",
+    "privacy",
     "webRequest",
     "webRequestBlocking",
     "<all_urls>"
