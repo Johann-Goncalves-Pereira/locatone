@@ -311,6 +311,19 @@ loadState().then(() => {
   setupIpRewrite();
   setupRttCancel();
 });
+
+// Zen's built-in browser_action panel loads moz-extension popup URLs as a
+// full-page "File not found" neterror. Open a real popup window instead.
+browser.browserAction.setPopup({ popup: "" }).catch(() => {});
+browser.browserAction.onClicked.addListener(() => {
+  browser.windows.create({
+    url: browser.runtime.getURL("popup/popup.html"),
+    type: "popup",
+    width: 400,
+    height: 640,
+  });
+});
+
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.locatone) {
     state = {

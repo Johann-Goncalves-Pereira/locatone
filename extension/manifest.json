@@ -12,8 +12,7 @@
       "48": "icons/icon-48.png",
       "96": "icons/icon-96.png"
     },
-    "default_title": "Locatone",
-    "default_popup": "popup/popup.html"
+    "default_title": "Locatone"
   },
   "background": {
     "scripts": [

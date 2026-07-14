@@ -2,14 +2,44 @@
 
 Firefox extension that spoofs where websites think you are — **without requiring a VPN**. Paste decimal coordinates, DMS, or a Google Maps link; Locatone overrides the Geolocation API, timezone/locale, WebRTC ICE, sensors, and common client-side IP-geo APIs (including Cloudflare `/cdn-cgi/trace`). Optionally route traffic through your own HTTP/SOCKS5 proxy so the real public IP matches.
 
-## Install (temporary)
+## Install (Zen Browser)
 
-1. Open Firefox → `about:debugging#/runtime/this-firefox`
+Sideload permanently into your Zen profile (unsigned local add-on):
+
+```bash
+./extension/sync-zen.sh
+```
+
+That builds an unpacked copy, points the profile at it, and **restarts Zen** if it is
+running (required — replacing an open `.xpi` leaves a stale JAR and the popup
+shows “File not found”).
+
+After you change code:
+
+```bash
+./extension/sync-zen.sh            # rebuild + restart Zen when open
+./extension/sync-zen.sh --no-restart  # write files only; restart Zen yourself
+```
+
+Options:
+
+```bash
+./extension/sync-zen.sh --profile /path/prof  # force a profile path
+ZEN_PROFILE=/path/prof ./extension/sync-zen.sh
+```
+
+The script sets `xpinstall.signatures.required=false` (and related prefs) in the
+profile’s `user.js` so Zen can load this local unsigned add-on.
+
+## Install (temporary Firefox / Zen)
+
+1. Open the browser → `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on…**
 3. Select [`manifest.json`](manifest.json) in this folder
 4. Click the Locatone toolbar icon
 
-Temporary add-ons are removed when Firefox restarts. For a permanent install, pack/sign via [web-ext](https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/) or AMO.
+Temporary add-ons are removed when the browser restarts. For AMO/signing, pack via
+[web-ext](https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/).
 
 ## Usage
 
@@ -70,6 +100,7 @@ Temporary add-ons are removed when Firefox restarts. For a permanent install, pa
 
 ```
 manifest.json
+sync-zen.sh          # install/update into Zen Browser
 background.js
 content/content.js
 lib/parse-location.js
