@@ -38,6 +38,12 @@ Firefox extension cannot forge that without a matching proxy.
 | Truth        | Mandirituba - PR | `-25.872917, -49.410583` |
 | Spoof target | Tallinn, Estonia | `59.457528, 24.697444`   |
 
+With **ProtonVPN → Tallinn**, IP / Cloudflare / Vercel `edge_geo` all say `EE`.
+The site’s remaining aces are client leftovers the extension must close:
+`accept_language`, `speech_voices`, `iframe_intl`, `service_worker_intl`, plus
+Date/Worker leaks. The forensics panel shows a **Mandirituba × Tallinn** verdict
+chip (`Consenso Tallinn` vs `Vazamento BR detectado`).
+
 ## Map & geolocation features
 
 The product lives in `src/features/location/`: Effect Schema signals → probe
@@ -88,19 +94,23 @@ Probes are grouped the same way as the forensics panel.
 
 #### Regional priors
 
-| Probe                | What it does                                                          |
-| -------------------- | --------------------------------------------------------------------- |
-| `ip_cloudflare`      | Cloudflare `/cdn-cgi/trace` edge country / colo (coarse prior)        |
-| `timezone`           | IANA timezone → inferred country codes                                |
-| `locale`             | `navigator.languages` / resolved locale → language region priors      |
-| `date_string_tz`     | Parse `Date#toString()` / `toTimeString()` for engine TZ leaks        |
-| `worker_intl`        | Blob Worker Intl timezone + `navigator.language` (content-script gap) |
-| `intl_currency`      | `Intl` currency / numbering system → regional prior                   |
-| `intl_calendar`      | `Intl` calendar system → regional prior                               |
-| `font_locale`        | Detect installed regional / emoji font stacks as locale hints         |
-| `keyboard_layout`    | Keyboard layout / layout map → region prior                           |
-| `referrer_tld`       | Document referrer TLD as a weak origin hint                           |
-| `color_scheme_solar` | Preferred color scheme vs expected solar day/night at inferred region |
+| Probe                 | What it does                                                          |
+| --------------------- | --------------------------------------------------------------------- |
+| `ip_cloudflare`       | Cloudflare `/cdn-cgi/trace` edge country / colo (coarse prior)        |
+| `timezone`            | IANA timezone → inferred country codes                                |
+| `locale`              | `navigator.languages` / resolved locale → language region priors      |
+| `date_string_tz`      | Parse `Date#toString()` / `toTimeString()` for engine TZ leaks        |
+| `worker_intl`         | Blob Worker Intl timezone + `navigator.language` (content-script gap) |
+| `accept_language`     | Server echo of HTTP `Accept-Language` (survives VPN; not JS-visible)  |
+| `speech_voices`       | `speechSynthesis.getVoices()` locale priors (e.g. pt-BR on macOS)     |
+| `iframe_intl`         | Immediate `about:blank` iframe Intl / language (injection race)       |
+| `service_worker_intl` | Same-origin Service Worker Intl / language (beyond blob Workers)      |
+| `intl_currency`       | `Intl` currency / numbering system → regional prior                   |
+| `intl_calendar`       | `Intl` calendar system → regional prior                               |
+| `font_locale`         | Detect installed regional / emoji font stacks as locale hints         |
+| `keyboard_layout`     | Keyboard layout / layout map → region prior                           |
+| `referrer_tld`        | Document referrer TLD as a weak origin hint                           |
+| `color_scheme_solar`  | Preferred color scheme vs expected solar day/night at inferred region |
 
 #### Conflicts
 
@@ -134,6 +144,7 @@ and `raw` evidence for the panel.
 - Per-signal cards with status badge, confidence, accuracy, and expandable raw
 - Selecting cards syncs highlight + camera focus on the map
 - Panel open/closed persists in the URL via `?panel=`
+- Competition verdict chip (Mandirituba × Tallinn) after a completed scan
 
 ## Scripts
 

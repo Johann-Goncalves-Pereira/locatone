@@ -3,6 +3,7 @@ import type {
 	ProbeId,
 } from '@features/location/api/location.schema'
 import { PROBE_FULL_LABELS } from '@features/location/lib/signal-panel'
+import { runAcceptLanguageProbe } from '@features/location/probes/run-accept-language'
 import { runBarometerProbe } from '@features/location/probes/run-barometer'
 import { runClockSkewProbe } from '@features/location/probes/run-clock-skew'
 import { runColorSchemeSolarProbe } from '@features/location/probes/run-color-scheme-solar'
@@ -18,6 +19,7 @@ import {
 	runGpsProbe,
 	runNetworkGeoProbe,
 } from '@features/location/probes/run-geolocation'
+import { runIframeIntlProbe } from '@features/location/probes/run-iframe-intl'
 import {
 	runIntlCalendarProbe,
 	runIntlCurrencyProbe,
@@ -41,6 +43,8 @@ import {
 } from '@features/location/probes/run-misc'
 import { runOrientationLeakProbe } from '@features/location/probes/run-orientation-leak'
 import { runRttProbe } from '@features/location/probes/run-rtt'
+import { runServiceWorkerIntlProbe } from '@features/location/probes/run-service-worker-intl'
+import { runSpeechVoicesProbe } from '@features/location/probes/run-speech-voices'
 import { runStorageGpsConflictProbe } from '@features/location/probes/run-storage-conflict'
 import { runWebRtcStunProbe } from '@features/location/probes/run-webrtc-stun'
 import { runWorkerIntlProbe } from '@features/location/probes/run-worker-intl'
@@ -127,6 +131,10 @@ export async function runAllProbes(
 		settleSignal('clock_skew', runClockSkewProbe(signal)),
 		Promise.resolve(runDateStringTzProbe()),
 		settleSignal('worker_intl', runWorkerIntlProbe()),
+		settleSignal('accept_language', runAcceptLanguageProbe(signal)),
+		settleSignal('speech_voices', runSpeechVoicesProbe()),
+		Promise.resolve(runIframeIntlProbe()),
+		settleSignal('service_worker_intl', runServiceWorkerIntlProbe()),
 		Promise.resolve(runTzOffsetConflictProbe()),
 		Promise.resolve(runReferrerTldProbe()),
 		Promise.resolve(runStorageEchoProbe()),

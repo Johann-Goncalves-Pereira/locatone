@@ -300,11 +300,173 @@ function setupRttNeutralize() {
   ]);
 }
 
+/** Build Accept-Language from spoofed locale (e.g. et-EE → et-EE,et;q=0.9,…). */
+function acceptLanguageFromLocale(locale) {
+  const loc = String(locale || "en-US").replace(/_/g, "-");
+  const base = loc.split("-")[0] || "en";
+  if (base.toLowerCase() === "en" && loc.toLowerCase().startsWith("en")) {
+    return `${loc},en;q=0.9`;
+  }
+  return `${loc},${base};q=0.9,en-US;q=0.8,en;q=0.7`;
+}
+
+function onAcceptLanguageHeaders(details) {
+  if (!state.enabled || !state.locale) return {};
+  const headers = details.requestHeaders || [];
+  const next = headers.filter(
+    (h) => String(h.name).toLowerCase() !== "accept-language"
+  );
+  next.push({
+    name: "Accept-Language",
+    value: acceptLanguageFromLocale(state.locale),
+  });
+  return { requestHeaders: next };
+}
+
+function setupAcceptLanguageRewrite() {
+  if (browser.webRequest.onBeforeSendHeaders.hasListener(onAcceptLanguageHeaders)) {
+    browser.webRequest.onBeforeSendHeaders.removeListener(
+      onAcceptLanguageHeaders
+    );
+  }
+  browser.webRequest.onBeforeSendHeaders.addListener(
+    onAcceptLanguageHeaders,
+    { urls: ["<all_urls>"] },
+    ["blocking", "requestHeaders"]
+  );
+}
+
+/**
+ * Pending Service Worker script URLs to prepend with Intl/locale prelude.
+ * Content script marks URLs on register(); also always covers Locatone probe.
+ */
+const swRewriteUntil = new Map();
+
+function markServiceWorkerScript(url) {
+  if (!url) return;
+  swRewriteUntil.set(String(url), Date.now() + 30_000);
+}
+
+function shouldRewriteServiceWorker(url) {
+  const u = String(url || "");
+  if (u.includes("locatone-sw-intl-probe")) return true;
+  const until = swRewriteUntil.get(u);
+  if (until == null) return false;
+  if (Date.now() > until) {
+    swRewriteUntil.delete(u);
+    return false;
+  }
+  return true;
+}
+
+function serviceWorkerPrelude() {
+  const tz = JSON.stringify(state.timezone || "UTC");
+  const locale = JSON.stringify(state.locale || "en-US");
+  let offset = 0;
+  try {
+    if (typeof LocatoneTZ !== "undefined" && LocatoneTZ.getTimezoneOffsetMinutes) {
+      offset = LocatoneTZ.getTimezoneOffsetMinutes(
+        state.timezone || "UTC",
+        new Date()
+      );
+    }
+  } catch {
+    offset = 0;
+  }
+  return (
+    "(function(){try{" +
+    "var TZ=" +
+    tz +
+    ",LOCALE=" +
+    locale +
+    ",OFFSET=" +
+    offset +
+    ";" +
+    "try{var o=Intl.DateTimeFormat.prototype.resolvedOptions;" +
+    "Intl.DateTimeFormat.prototype.resolvedOptions=function(){" +
+    "var r=o.call(this);try{r.timeZone=TZ;r.locale=LOCALE;}catch(e){}" +
+    "return r;};}catch(e){}" +
+    "try{Date.prototype.getTimezoneOffset=function(){return OFFSET;};}catch(e){}" +
+    "try{Object.defineProperty(self.navigator,'language',{configurable:true,get:function(){return LOCALE;}});" +
+    "Object.defineProperty(self.navigator,'languages',{configurable:true,get:function(){return [LOCALE,String(LOCALE).split('-')[0]];}});}catch(e){}" +
+    "}catch(e){}})();\n"
+  );
+}
+
+function onServiceWorkerHeaders(details) {
+  if (!state.enabled || state.lat == null) return {};
+  if (!shouldRewriteServiceWorker(details.url)) return {};
+
+  const filter = browser.webRequest.filterResponseData(details.requestId);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder("utf-8");
+  let chunks = [];
+
+  filter.ondata = (event) => {
+    chunks.push(new Uint8Array(event.data));
+  };
+  filter.onstop = () => {
+    try {
+      let total = 0;
+      for (const c of chunks) total += c.length;
+      const merged = new Uint8Array(total);
+      let off = 0;
+      for (const c of chunks) {
+        merged.set(c, off);
+        off += c.length;
+      }
+      const body = decoder.decode(merged);
+      filter.write(encoder.encode(serviceWorkerPrelude() + body));
+    } catch (e) {
+      console.warn("Locatone SW rewrite failed", e);
+      try {
+        for (const c of chunks) filter.write(c);
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      filter.close();
+    } catch {
+      /* already closed */
+    }
+    swRewriteUntil.delete(details.url);
+  };
+  filter.onerror = () => {
+    try {
+      filter.close();
+    } catch {
+      /* already closed */
+    }
+  };
+
+  const headers = (details.responseHeaders || []).filter(
+    (h) => String(h.name).toLowerCase() !== "content-encoding"
+  );
+  return { responseHeaders: headers };
+}
+
+function setupServiceWorkerRewrite() {
+  if (browser.webRequest.onHeadersReceived.hasListener(onServiceWorkerHeaders)) {
+    browser.webRequest.onHeadersReceived.removeListener(onServiceWorkerHeaders);
+  }
+  browser.webRequest.onHeadersReceived.addListener(
+    onServiceWorkerHeaders,
+    { urls: ["<all_urls>"], types: ["script"] },
+    ["blocking", "responseHeaders"]
+  );
+}
+
 browser.runtime.onMessage.addListener((msg) => {
   if (!msg || !msg.type) return;
 
   if (msg.type === "locatone:getState") {
     return Promise.resolve(state);
+  }
+
+  if (msg.type === "locatone:markSwScript") {
+    markServiceWorkerScript(msg.url);
+    return Promise.resolve({ ok: true });
   }
 
   if (msg.type === "locatone:resolve") {
@@ -341,6 +503,8 @@ browser.runtime.onMessage.addListener((msg) => {
 loadState().then(() => {
   setupIpRewrite();
   setupRttNeutralize();
+  setupAcceptLanguageRewrite();
+  setupServiceWorkerRewrite();
 });
 
 browser.storage.onChanged.addListener((changes, area) => {

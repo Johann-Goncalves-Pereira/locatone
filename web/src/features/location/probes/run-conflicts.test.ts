@@ -109,4 +109,61 @@ describe('runIpVsTzProbe', () => {
 			ipSanityConflict: true,
 		})
 	})
+
+	it('flags Accept-Language, speech, iframe and SW leaks', () => {
+		const result = runIpVsTzProbe([
+			signal({
+				id: 'ip_cloudflare',
+				status: 'ok',
+				confidence: 0.5,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'timezone',
+				status: 'ok',
+				confidence: 0.4,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'locale',
+				status: 'ok',
+				confidence: 0.3,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'accept_language',
+				status: 'ok',
+				confidence: 0.6,
+				regionHints: { countryCodes: ['BR'] },
+				raw: { mismatch: true },
+			}),
+			signal({
+				id: 'speech_voices',
+				status: 'ok',
+				confidence: 0.6,
+				raw: { hasPtBr: true },
+			}),
+			signal({
+				id: 'iframe_intl',
+				status: 'ok',
+				confidence: 0.6,
+				raw: { mismatch: true },
+			}),
+			signal({
+				id: 'service_worker_intl',
+				status: 'ok',
+				confidence: 0.6,
+				raw: { mismatch: true },
+			}),
+		])
+
+		expect(result.raw).toMatchObject({
+			conflicted: true,
+			acceptLanguageMismatch: true,
+			speechBrazilLeak: true,
+			iframeMismatch: true,
+			serviceWorkerMismatch: true,
+		})
+		expect(result.summary).toMatch(/Accept-Language|vozes|iframe|SW/i)
+	})
 })

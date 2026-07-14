@@ -2,10 +2,41 @@ import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-import { defineConfig } from 'vite'
+import { type Plugin, defineConfig } from 'vite'
 
 /** Soft Vite warning threshold; hard fail is enforced by scripts/check-bundle-budget.mjs */
 const CHUNK_SIZE_WARNING_LIMIT_KB = 500
+
+function clientHeadersDevPlugin(): Plugin {
+	return {
+		name: 'locatone-client-headers-dev',
+		configureServer(server) {
+			server.middlewares.use('/api/client-headers', (req, res) => {
+				res.setHeader('Cache-Control', 'no-store')
+				res.setHeader('Content-Type', 'application/json; charset=utf-8')
+				const headerRaw: unknown = Reflect.get(req.headers, 'accept-language')
+				let acceptLanguage: string | undefined
+				if (typeof headerRaw === 'string') {
+					acceptLanguage = headerRaw
+				} else if (
+					Array.isArray(headerRaw) &&
+					typeof headerRaw[0] === 'string'
+				) {
+					acceptLanguage = headerRaw[0]
+				}
+				res.statusCode = 200
+				res.end(
+					JSON.stringify({
+						available: true,
+						...(acceptLanguage !== undefined && acceptLanguage.length > 0
+							? { acceptLanguage }
+							: {}),
+					}),
+				)
+			})
+		},
+	}
+}
 
 export default defineConfig(({ mode }) => {
 	const isProduction = mode === 'production'
@@ -18,6 +49,7 @@ export default defineConfig(({ mode }) => {
 			__DEV__: !isProduction,
 		},
 		plugins: [
+			clientHeadersDevPlugin(),
 			tailwindcss(),
 			tanstackRouter({ target: 'react', autoCodeSplitting: true }),
 			react({

@@ -7,6 +7,7 @@ import type {
 } from '@features/location/api/location.schema'
 import { sectionOpenAtom } from '@features/location/atoms/location-ui.atom'
 import { SignalCard } from '@features/location/components/SignalCard'
+import { competitionVerdict } from '@features/location/lib/competition-verdict'
 import { FUSED_COLOR } from '@features/location/lib/probe-colors'
 import { formatAccuracyMeters } from '@features/location/lib/signal-map-points'
 import {
@@ -68,6 +69,10 @@ export function ForensicsPanel({
 			? collectingPlaceholderSignals()
 			: signals
 	const grouped = groupSignalsBySection(displaySignals)
+	const verdict =
+		!isCollecting && signals.length > 0
+			? competitionVerdict(signals)
+			: undefined
 	const panelBodyId = 'locatone-forensics-body'
 	const ctaLabel = revealCtaLabel({
 		isCollecting: false,
@@ -155,6 +160,38 @@ export function ForensicsPanel({
 								Tentar de novo
 							</button>
 						) : null}
+					</div>
+				) : null}
+
+				{verdict !== undefined ? (
+					<div
+						className={`mb-4 rounded-xl border px-3 py-3 ${
+							verdict.kind === 'brazil_leak'
+								? 'border-[color-mix(in_oklab,var(--loc-danger)_40%,transparent)] bg-[var(--loc-panel)]'
+								: verdict.kind === 'aligned_spoof'
+									? 'border-[color-mix(in_oklab,var(--loc-ok)_40%,transparent)] bg-[var(--loc-panel)]'
+									: 'border-[var(--loc-border)] bg-[var(--loc-panel)]'
+						}`}
+					>
+						<div className='flex flex-wrap items-center gap-2'>
+							<span
+								className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase ${
+									verdict.kind === 'brazil_leak'
+										? 'border-[color-mix(in_oklab,var(--loc-danger)_40%,transparent)] bg-[color-mix(in_oklab,var(--loc-danger)_12%,transparent)] text-[var(--loc-danger)]'
+										: verdict.kind === 'aligned_spoof'
+											? 'border-[color-mix(in_oklab,var(--loc-ok)_40%,transparent)] bg-[color-mix(in_oklab,var(--loc-ok)_12%,transparent)] text-[var(--loc-ok)]'
+											: 'border-[var(--loc-border)] text-[var(--loc-muted)]'
+								}`}
+							>
+								{verdict.label}
+							</span>
+							<span className='text-[10px] tracking-wider text-[var(--loc-muted)] uppercase'>
+								Mandirituba × Tallinn
+							</span>
+						</div>
+						<p className='mt-2 text-sm text-[var(--loc-ink)]'>
+							{verdict.detail}
+						</p>
 					</div>
 				) : null}
 

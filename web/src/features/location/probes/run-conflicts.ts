@@ -105,14 +105,23 @@ export function runIpVsTzProbe(
 		...signals
 			.filter(
 				signal =>
-					(signal.id === 'date_string_tz' || signal.id === 'worker_intl') &&
+					(signal.id === 'date_string_tz' ||
+						signal.id === 'worker_intl' ||
+						signal.id === 'iframe_intl' ||
+						signal.id === 'service_worker_intl') &&
 					signal.status === 'ok',
 			)
 			.flatMap(signal => signal.regionHints?.countryCodes ?? []),
 	]
 
 	const localeCountries = signals
-		.filter(signal => signal.id === 'locale' && signal.status === 'ok')
+		.filter(
+			signal =>
+				(signal.id === 'locale' ||
+					signal.id === 'accept_language' ||
+					signal.id === 'speech_voices') &&
+				signal.status === 'ok',
+		)
 		.flatMap(signal => signal.regionHints?.countryCodes ?? [])
 
 	const groups = [ipCountries, tzCountries, localeCountries].filter(
@@ -137,10 +146,27 @@ export function runIpVsTzProbe(
 
 	const dateString = signals.find(signal => signal.id === 'date_string_tz')
 	const workerIntl = signals.find(signal => signal.id === 'worker_intl')
+	const iframeIntl = signals.find(signal => signal.id === 'iframe_intl')
+	const serviceWorkerIntl = signals.find(
+		signal => signal.id === 'service_worker_intl',
+	)
+	const acceptLanguage = signals.find(signal => signal.id === 'accept_language')
+	const speechVoices = signals.find(signal => signal.id === 'speech_voices')
+
 	const dateStringLeak =
 		dateString?.status === 'ok' && readRawFlag(dateString.raw, 'offsetMismatch')
 	const workerMismatch =
 		workerIntl?.status === 'ok' && readRawFlag(workerIntl.raw, 'mismatch')
+	const iframeMismatch =
+		iframeIntl?.status === 'ok' && readRawFlag(iframeIntl.raw, 'mismatch')
+	const serviceWorkerMismatch =
+		serviceWorkerIntl?.status === 'ok' &&
+		readRawFlag(serviceWorkerIntl.raw, 'mismatch')
+	const acceptLanguageMismatch =
+		acceptLanguage?.status === 'ok' &&
+		readRawFlag(acceptLanguage.raw, 'mismatch')
+	const speechBrazilLeak =
+		speechVoices?.status === 'ok' && readRawFlag(speechVoices.raw, 'hasPtBr')
 
 	const conflicted =
 		regionConflicted ||
@@ -149,7 +175,11 @@ export function runIpVsTzProbe(
 		ipSanityConflict ||
 		storageGpsConflict ||
 		dateStringLeak ||
-		workerMismatch
+		workerMismatch ||
+		iframeMismatch ||
+		serviceWorkerMismatch ||
+		acceptLanguageMismatch ||
+		speechBrazilLeak
 
 	const extras: string[] = []
 	if (magneticConflict) {
@@ -169,6 +199,18 @@ export function runIpVsTzProbe(
 	}
 	if (workerMismatch) {
 		extras.push('Worker×página')
+	}
+	if (iframeMismatch) {
+		extras.push('iframe×página')
+	}
+	if (serviceWorkerMismatch) {
+		extras.push('SW×página')
+	}
+	if (acceptLanguageMismatch) {
+		extras.push('Accept-Language×navigator')
+	}
+	if (speechBrazilLeak) {
+		extras.push('vozes pt-BR')
 	}
 
 	return makeSignal({
@@ -198,6 +240,10 @@ export function runIpVsTzProbe(
 			storageGpsConflict,
 			dateStringLeak,
 			workerMismatch,
+			iframeMismatch,
+			serviceWorkerMismatch,
+			acceptLanguageMismatch,
+			speechBrazilLeak,
 			conflicted,
 		},
 	})

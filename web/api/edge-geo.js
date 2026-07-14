@@ -59,6 +59,11 @@ module.exports = function handler(req, res) {
 		return
 	}
 
+	const acceptLanguage =
+		typeof headers['accept-language'] === 'string'
+			? headers['accept-language']
+			: undefined
+
 	const body = {
 		available: true,
 	}
@@ -68,6 +73,7 @@ module.exports = function handler(req, res) {
 	if (city) body.city = decodeURIComponent(String(city))
 	if (latitude !== undefined) body.latitude = latitude
 	if (longitude !== undefined) body.longitude = longitude
+	if (acceptLanguage) body.acceptLanguage = acceptLanguage
 
 	res.statusCode = 200
 	res.end(JSON.stringify(body))

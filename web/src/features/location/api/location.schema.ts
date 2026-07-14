@@ -23,6 +23,10 @@ export const ProbeId = Schema.Literal(
 	'clock_skew',
 	'date_string_tz',
 	'worker_intl',
+	'accept_language',
+	'speech_voices',
+	'iframe_intl',
+	'service_worker_intl',
 	'tz_offset_conflict',
 	'ip_vs_tz',
 	'ip_sanity',
@@ -146,9 +150,18 @@ export const EdgeGeoResponse = Schema.Struct({
 	city: Schema.optional(Schema.String),
 	latitude: Schema.optional(Schema.Number),
 	longitude: Schema.optional(Schema.Number),
+	acceptLanguage: Schema.optional(Schema.String),
 	reason: Schema.optional(Schema.String),
 })
 export type EdgeGeoResponse = typeof EdgeGeoResponse.Type
+
+/** Same-origin echo of request headers (Accept-Language). */
+export const ClientHeadersResponse = Schema.Struct({
+	available: Schema.Boolean,
+	acceptLanguage: Schema.optional(Schema.String),
+	reason: Schema.optional(Schema.String),
+})
+export type ClientHeadersResponse = typeof ClientHeadersResponse.Type
 
 export const StoredCoordinates = Schema.Struct({
 	lat: Schema.Number,

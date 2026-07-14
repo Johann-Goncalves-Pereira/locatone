@@ -3,9 +3,10 @@
 
 /**
  * Locatone content script — overrides page geolocation, timezone, language,
- * Date string TZ, Worker Intl, Intl NumberFormat, canvas font probes, WebRTC
- * ICE, sensors, deviceorientation, keyboard, and prefers-color-scheme via
- * Firefox wrappedJSObject / exportFunction (CSP-safe).
+ * Date string TZ, Worker / Service Worker Intl, speech voices, iframe Intl,
+ * Intl NumberFormat, canvas font probes, WebRTC ICE, sensors,
+ * deviceorientation, keyboard, and prefers-color-scheme via Firefox
+ * wrappedJSObject / exportFunction (CSP-safe).
  */
 (() => {
   const config = {
@@ -93,6 +94,9 @@
     orientationPatched: false,
     dateStringPatched: false,
     workerPatched: false,
+    speechPatched: false,
+    iframePatched: false,
+    serviceWorkerPatched: false,
     matchMediaPatched: false,
     keyboardPatched: false,
     numberFormatPatched: false,
@@ -831,6 +835,230 @@
     }
   }
 
+  function countryFromLocaleTag(locale) {
+    const parts = String(locale || "")
+      .replace(/_/g, "-")
+      .split("-");
+    if (parts.length >= 2 && parts[1]) return parts[1].toUpperCase();
+    return "";
+  }
+
+  function voiceMatchesSpoof(lang, spoofLocale) {
+    const voice = String(lang || "")
+      .replace(/_/g, "-")
+      .toLowerCase();
+    const spoof = String(spoofLocale || "")
+      .replace(/_/g, "-")
+      .toLowerCase();
+    const spoofBase = spoof.split("-")[0];
+    const spoofCountry = countryFromLocaleTag(spoof).toLowerCase();
+    if (!voice) return false;
+    if (voice === spoof || voice.startsWith(spoof + "-")) return true;
+    if (spoofBase && (voice === spoofBase || voice.startsWith(spoofBase + "-")))
+      return true;
+    if (spoofCountry && voice.endsWith("-" + spoofCountry)) return true;
+    // Always keep generic English voices as soft fallback.
+    if (voice === "en" || voice.startsWith("en-") || voice.startsWith("en_"))
+      return true;
+    return false;
+  }
+
+  function installSpeechVoiceFilter(win) {
+    if (originals.speechPatched) return;
+    try {
+      const synth = win.speechSynthesis;
+      if (!synth || typeof synth.getVoices !== "function") return;
+      const origGetVoices = synth.getVoices.bind(synth);
+      synth.getVoices = exportFunction(function () {
+        const voices = origGetVoices();
+        if (!config.enabled || !config.locale) return voices;
+        const spoof = String(config.locale);
+        const filtered = [];
+        for (let i = 0; i < voices.length; i++) {
+          const v = voices[i];
+          if (voiceMatchesSpoof(v && v.lang, spoof)) filtered.push(v);
+        }
+        // If filtering removed everything, fall back to English-only subset.
+        if (filtered.length === 0) {
+          for (let i = 0; i < voices.length; i++) {
+            const v = voices[i];
+            const lang = String((v && v.lang) || "").toLowerCase();
+            if (lang === "en" || lang.startsWith("en-") || lang.startsWith("en_"))
+              filtered.push(v);
+          }
+        }
+        return filtered.length > 0 ? filtered : voices;
+      }, win);
+      originals.speechPatched = true;
+    } catch (e) {
+      console.warn("Locatone speech voices filter failed", e);
+    }
+  }
+
+  function applyIntlToWindow(targetWin) {
+    if (!targetWin || !config.enabled) return;
+    try {
+      const locale = config.locale || "en-US";
+      const timezone = config.timezone || "UTC";
+      Object.defineProperty(targetWin.navigator, "language", {
+        configurable: true,
+        enumerable: true,
+        get: exportFunction(function () {
+          return locale;
+        }, targetWin),
+      });
+      Object.defineProperty(targetWin.navigator, "languages", {
+        configurable: true,
+        enumerable: true,
+        get: exportFunction(function () {
+          const arr = new targetWin.Array();
+          arr.push(locale);
+          arr.push(String(locale).split("-")[0]);
+          return arr;
+        }, targetWin),
+      });
+      const origResolved =
+        targetWin.Intl.DateTimeFormat.prototype.resolvedOptions;
+      targetWin.Intl.DateTimeFormat.prototype.resolvedOptions = exportFunction(
+        function () {
+          const o = origResolved.call(this);
+          try {
+            o.timeZone = timezone;
+            o.locale = locale;
+          } catch {
+            /* keep */
+          }
+          return o;
+        },
+        targetWin
+      );
+      targetWin.Date.prototype.getTimezoneOffset = exportFunction(function () {
+        const ms = Number(this);
+        return getOffsetMinutes(
+          timezone,
+          Number.isFinite(ms) ? ms : Date.now()
+        );
+      }, targetWin);
+    } catch (e) {
+      console.warn("Locatone iframe window patch failed", e);
+    }
+  }
+
+  function installIframeHardening(win) {
+    if (originals.iframePatched) return;
+    try {
+      const proto = win.HTMLIFrameElement && win.HTMLIFrameElement.prototype;
+      if (!proto) return;
+
+      const patchFrame = function (iframe) {
+        try {
+          const cw = iframe.contentWindow;
+          if (cw) applyIntlToWindow(cw);
+        } catch {
+          /* cross-origin */
+        }
+      };
+
+      const origAppend = win.Node.prototype.appendChild;
+      win.Node.prototype.appendChild = exportFunction(function (child) {
+        const result = origAppend.call(this, child);
+        try {
+          if (
+            child &&
+            child.tagName &&
+            String(child.tagName).toUpperCase() === "IFRAME"
+          ) {
+            patchFrame(child);
+          }
+        } catch {
+          /* ignore */
+        }
+        return result;
+      }, win);
+
+      const origInsertBefore = win.Node.prototype.insertBefore;
+      win.Node.prototype.insertBefore = exportFunction(function (
+        child,
+        reference
+      ) {
+        const result = origInsertBefore.call(this, child, reference);
+        try {
+          if (
+            child &&
+            child.tagName &&
+            String(child.tagName).toUpperCase() === "IFRAME"
+          ) {
+            patchFrame(child);
+          }
+        } catch {
+          /* ignore */
+        }
+        return result;
+      }, win);
+
+      try {
+        const desc = Object.getOwnPropertyDescriptor(proto, "contentWindow");
+        if (desc && desc.get) {
+          const origGet = desc.get;
+          Object.defineProperty(proto, "contentWindow", {
+            configurable: true,
+            enumerable: true,
+            get: exportFunction(function () {
+              const cw = origGet.call(this);
+              if (cw && config.enabled) {
+                try {
+                  applyIntlToWindow(cw);
+                } catch {
+                  /* ignore */
+                }
+              }
+              return cw;
+            }, win),
+          });
+        }
+      } catch {
+        /* getter redefine may fail */
+      }
+
+      originals.iframePatched = true;
+    } catch (e) {
+      console.warn("Locatone iframe hardening failed", e);
+    }
+  }
+
+  function installServiceWorkerOverride(win) {
+    if (originals.serviceWorkerPatched) return;
+    try {
+      const container = win.navigator && win.navigator.serviceWorker;
+      if (!container || typeof container.register !== "function") return;
+      const origRegister = container.register.bind(container);
+      container.register = exportFunction(function (scriptURL, options) {
+        try {
+          if (config.enabled) {
+            const abs = new win.URL(String(scriptURL), win.location.href).href;
+            // Fire-and-forget mark for background filterResponseData rewrite.
+            try {
+              browser.runtime.sendMessage({
+                type: "locatone:markSwScript",
+                url: abs,
+              });
+            } catch {
+              /* ignore */
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+        return options === undefined
+          ? origRegister(scriptURL)
+          : origRegister(scriptURL, options);
+      }, win);
+      originals.serviceWorkerPatched = true;
+    } catch (e) {
+      console.warn("Locatone ServiceWorker override failed", e);
+    }
+  }
+
   function installOrientationStub(win) {
     if (originals.orientationPatched || !originals.windowAddEventListener) {
       return;
@@ -1292,6 +1520,24 @@
       installWorkerOverrides(win);
     } catch (e) {
       console.warn("Locatone Worker install failed", e);
+    }
+
+    try {
+      installSpeechVoiceFilter(win);
+    } catch (e) {
+      console.warn("Locatone speech install failed", e);
+    }
+
+    try {
+      installIframeHardening(win);
+    } catch (e) {
+      console.warn("Locatone iframe install failed", e);
+    }
+
+    try {
+      installServiceWorkerOverride(win);
+    } catch (e) {
+      console.warn("Locatone ServiceWorker install failed", e);
     }
 
     try {

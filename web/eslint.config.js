@@ -42,6 +42,14 @@ export default [
 			},
 		},
 	},
+	{
+		files: ['public/**/*.js'],
+		languageOptions: {
+			globals: {
+				...globals.serviceworker,
+			},
+		},
+	},
 	...tseslint.configs.strictTypeChecked.map(config => ({
 		...config,
 		files: ['**/*.{ts,tsx}'],

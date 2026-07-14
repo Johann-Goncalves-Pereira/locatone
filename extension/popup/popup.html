@@ -38,6 +38,13 @@
         </label>
       </div>
 
+      <div class="fixture-row">
+        <button type="button" id="fixtureTallinn" class="btn fixture">
+          Tallinn fixture
+        </button>
+        <span class="fixture-hint">59.457528, 24.697444 · ProtonVPN EE</span>
+      </div>
+
       <div id="resolved" class="resolved" hidden>
         <div class="resolved-grid">
           <div>
@@ -71,6 +78,8 @@
           <span class="chip">Fonts</span>
           <span class="chip">WebRTC</span>
           <span class="chip">IP</span>
+          <span class="chip">Headers</span>
+          <span class="chip">Voices</span>
         </div>
       </div>
 
@@ -146,8 +155,10 @@
       <footer class="footer">
         <p id="status" class="status" role="status">Spoofing off</p>
         <p id="edgeWarn" class="edge-warn" hidden>
-          Server-side edge geo still sees your real IP — enable a Tallinn-exit
-          proxy to beat Vercel <code>edge_geo</code>.
+          Without a matching exit IP, Vercel <code>edge_geo</code> sees your
+          real ISP. With <strong>ProtonVPN → Tallinn</strong>, edge geo already
+          says EE — keep proxy Off and beat Accept-Language / voices / SW / iframe
+          leaks instead.
         </p>
         <p id="error" class="error" hidden></p>
       </footer>
