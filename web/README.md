@@ -1,9 +1,10 @@
 # Locatone
 
-Forense de localização no navegador: coleta múltiplos sinais (GPS, rede, IP
-Cloudflare/ipwho/geojs, WebRTC/STUN, Intl, RTT, fontes, sensores, teclado e
-outros) e mostra um ponto fundido no mapa com um painel transparente de cada
-método.
+Browser location forensics: run dozens of independent probes (GPS, network geo,
+IP providers, WebRTC/STUN, Intl priors, RTT lateration, fonts, keyboard,
+compass, magnetometer, barometer, solar theme, clock skew, and conflict checks),
+fuse the ones with coordinates, and plot every method on a full-bleed map beside
+a transparent evidence panel.
 
 ## Stack
 
@@ -11,7 +12,7 @@ método.
 - Vite (`rolldown-vite`) + React Compiler
 - TanStack Router + TanStack Query
 - Effect — Schema, Effects, `@effect-atom/atom-react`
-- Leaflet + react-leaflet (mapa)
+- Leaflet + react-leaflet (map)
 - Tailwind CSS v4
 - Vitest + Testing Library
 
@@ -26,6 +27,97 @@ Copy `.env.example` to `.env` to override STUN / IP lookup bases. Only use the
 `VITE_` prefix for values safe to expose in the browser. Locatone v1 is
 client-only and uses public APIs (Cloudflare trace, ipwho.is, geojs.io, public
 STUN).
+
+## Map & geolocation features
+
+The product lives in `src/features/location/`: Effect Schema signals → probe
+runners → weighted fusion → Leaflet map + forensics panel. Optional `?panel=`
+(`open` | `closed`) is owned by the page/route; selected probes and scan run id
+use Effect Atoms.
+
+### Map (Leaflet)
+
+- Full-viewport dark Carto basemap (OpenStreetMap attribution)
+- One colored pin per probe that yields coordinates (or a country-centroid
+  fallback marked as approximate)
+- Accuracy circles around probes and the fused estimate (large circles only when
+  the probe is selected)
+- Distinct “fusion” marker for the weighted multi-signal estimate
+- Click a pin / circle or a panel card to select/deselect probes; multi-select
+  fits the camera to those points
+- Auto camera: fly/fit to priority (accurate) points + fusion; Approximate /
+  very coarse points stay out of the default fit
+- Collapsible “Métodos no mapa” legend (auto-collapsed when the panel opens)
+- Scan progress line while probes are collecting
+
+### Signal fusion
+
+- Weighted average of OK signals that have `lat`/`lng` (weight =
+  `confidence / accuracyMeters`)
+- Soft RTT lateration only enters fusion when its confidence is meaningful
+- Falls back to country-centroid intersection when no coordinates exist
+- Agreement label: **aligned** | **conflicted** | **sparse**, with confidence
+  and contributing `sourceIds`
+
+### Probe catalog
+
+Probes are grouped the same way as the forensics panel.
+
+#### Coordinates
+
+| Probe          | What it does                                                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `gps`          | High-accuracy Geolocation API (GNSS); may take two samples and keep the better accuracy; persists last OK fix for `storage_echo`   |
+| `network_geo`  | Coarse Geolocation (`enableHighAccuracy: false`) — browser Wi‑Fi / cell triangulation, labeled honestly (not a separate Wi‑Fi API) |
+| `ip_ipwho`     | ipwho.is geo lookup → lat/lng, city, ISP, timezone hints                                                                           |
+| `ip_geojs`     | geojs.io geo JSON → lat/lng + region hints                                                                                         |
+| `webrtc_stun`  | WebRTC ICE against configurable STUN; collects reflexive IPv4 + IPv6, then geo-looks up candidates                                 |
+| `rtt_probe`    | Multi-endpoint RTT to regional landmarks → soft lateration (weak confidence)                                                       |
+| `storage_echo` | Echo of the previous successful GPS fix stored in this session                                                                     |
+
+#### Regional priors
+
+| Probe                | What it does                                                          |
+| -------------------- | --------------------------------------------------------------------- |
+| `ip_cloudflare`      | Cloudflare `/cdn-cgi/trace` edge country / colo (coarse prior)        |
+| `timezone`           | IANA timezone → inferred country codes                                |
+| `locale`             | `navigator.languages` / resolved locale → language region priors      |
+| `intl_currency`      | `Intl` currency / numbering system → regional prior                   |
+| `intl_calendar`      | `Intl` calendar system → regional prior                               |
+| `font_locale`        | Detect installed regional / emoji font stacks as locale hints         |
+| `keyboard_layout`    | Keyboard layout / layout map → region prior                           |
+| `referrer_tld`       | Document referrer TLD as a weak origin hint                           |
+| `color_scheme_solar` | Preferred color scheme vs expected solar day/night at inferred region |
+
+#### Conflicts
+
+| Probe                | What it does                                              |
+| -------------------- | --------------------------------------------------------- |
+| `magnetometer`       | Device magnetic field vs World Magnetic Model (WMM) bands |
+| `tz_offset_conflict` | System clock offset vs claimed IANA timezone              |
+| `ip_vs_tz`           | Cross-check IP country(ies) × timezone × locale           |
+
+#### Metadata / sensors
+
+| Probe              | What it does                                                     |
+| ------------------ | ---------------------------------------------------------------- |
+| `compass`          | Device orientation / heading                                     |
+| `barometer`        | Ambient pressure sensor, compared to GPS altitude when available |
+| `clock_skew`       | Local clock drift vs remote time                                 |
+| `network_info`     | Network Information API connection type (when available)         |
+| `permission_state` | Geolocation permission state                                     |
+
+Each signal carries `status` (`ok` | `denied` | `unsupported` | `error`),
+`confidence` (0–1), optional coordinates / accuracy, `regionHints`, `summary`,
+and `raw` evidence for the panel.
+
+### Forensics UI
+
+- Hero CTA (“Revelar origem”) kicks off a full parallel probe scan
+- Panel groups: Coordenadas, Priors regionais, Conflitos, Metadados, Negados
+- Per-signal cards with status badge, confidence, accuracy, and expandable raw
+- Selecting cards syncs highlight + camera focus on the map
+- Panel open/closed persists in the URL via `?panel=`
 
 ## Scripts
 
@@ -58,9 +150,17 @@ src/
 └── test/          # Test utilities
 ```
 
-See `src/features/location/` for the location forensics feature: Effect Schema
-signals → probe runners → fusion → map + forensics panel. Optional `?panel=`
-search param is owned by the page/route.
+Location module layout:
+
+```
+src/features/location/
+├── api/        # Schemas, IP Effects, query keys/options, search panel param
+├── atoms/      # Scan run id + selected signal ids (UI outside the URL)
+├── components/ # Map, hero, forensics panel, signal cards
+├── hooks/      # useLocationForensics orchestration
+├── lib/        # Fusion, map points, RTT lateration, WMM/solar/barometric helpers
+└── probes/     # One runner per probe + runAllProbes
+```
 
 ## Typing conventions
 
@@ -129,3 +229,5 @@ URL/search state belongs in route search params, not Effect Atoms.
 - Use Corepack so the pinned `packageManager` (pnpm) is respected.
 - Browsers do not expose Wi‑Fi vs cell triangulation separately; Locatone probes
   GPS (high accuracy) and network/coarse geolocation and labels them honestly.
+- Public STUN / IP endpoints are rate-limited and opaque; treat IP and RTT
+  estimates as weak evidence, not ground truth.
