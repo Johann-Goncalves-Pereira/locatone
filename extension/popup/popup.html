@@ -4,25 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Locatone</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
+    <div class="atmosphere" aria-hidden="true"></div>
     <div class="shell">
       <header class="brand">
-        <div class="mark" aria-hidden="true"></div>
-        <div>
-          <h1>Locatone</h1>
-          <p class="tagline">Spoof where the browser thinks you are</p>
-        </div>
+        <h1 class="font-display">Locatone</h1>
+        <p class="tagline">Spoof where the browser thinks you are</p>
       </header>
 
       <label class="field">
         <span class="label">Location</span>
         <textarea
           id="input"
-          rows="3"
+          rows="1"
           spellcheck="false"
-          placeholder="59.456619, 24.697315&#10;59°27'23.8&quot;N 24°41'50.2&quot;E&#10;https://maps.app.goo.gl/…"
+          placeholder="59.456619, 24.697315 · DMS · Maps URL"
         ></textarea>
       </label>
 
@@ -52,38 +56,77 @@
             <span class="k">Locale</span>
             <span id="locale" class="v"></span>
           </div>
+          <div>
+            <span class="k">Currency</span>
+            <span id="currency" class="v"></span>
+          </div>
+          <div>
+            <span class="k">Country</span>
+            <span id="country" class="v"></span>
+          </div>
+        </div>
+        <div id="coverage" class="coverage" aria-label="Coverage">
+          <span class="chip">Geo</span>
+          <span class="chip">Intl</span>
+          <span class="chip">Fonts</span>
+          <span class="chip">WebRTC</span>
+          <span class="chip">IP</span>
         </div>
       </div>
 
       <section class="proxy">
-        <h2>Proxy <span class="hint">(optional — for real IP)</span></h2>
-        <div class="row">
-          <label class="field grow">
-            <span class="label">Mode</span>
-            <select id="proxyMode">
-              <option value="none">Off</option>
-              <option value="http">HTTP</option>
-              <option value="socks5">SOCKS5</option>
-            </select>
-          </label>
-          <label class="field grow">
-            <span class="label">Host</span>
-            <input id="proxyHost" type="text" placeholder="127.0.0.1" autocomplete="off" />
-          </label>
-          <label class="field port">
-            <span class="label">Port</span>
-            <input id="proxyPort" type="text" placeholder="1080" autocomplete="off" />
-          </label>
-        </div>
-        <div class="row">
-          <label class="field grow">
-            <span class="label">Username</span>
-            <input id="proxyUser" type="text" placeholder="optional" autocomplete="off" />
-          </label>
-          <label class="field grow">
-            <span class="label">Password</span>
-            <input id="proxyPass" type="password" placeholder="optional" autocomplete="off" />
-          </label>
+        <h2 class="font-display">
+          Proxy <span class="hint">(optional — for real IP)</span>
+        </h2>
+        <label class="field">
+          <span class="label">Mode</span>
+          <select id="proxyMode">
+            <option value="none">Off</option>
+            <option value="http">HTTP</option>
+            <option value="socks5">SOCKS5</option>
+          </select>
+        </label>
+        <div id="proxyDetails" class="proxy-details" hidden>
+          <div class="row">
+            <label class="field grow">
+              <span class="label">Host</span>
+              <input
+                id="proxyHost"
+                type="text"
+                placeholder="127.0.0.1"
+                autocomplete="off"
+              />
+            </label>
+            <label class="field port">
+              <span class="label">Port</span>
+              <input
+                id="proxyPort"
+                type="text"
+                placeholder="1080"
+                autocomplete="off"
+              />
+            </label>
+          </div>
+          <div class="row">
+            <label class="field grow">
+              <span class="label">Username</span>
+              <input
+                id="proxyUser"
+                type="text"
+                placeholder="optional"
+                autocomplete="off"
+              />
+            </label>
+            <label class="field grow">
+              <span class="label">Password</span>
+              <input
+                id="proxyPass"
+                type="password"
+                placeholder="optional"
+                autocomplete="off"
+              />
+            </label>
+          </div>
         </div>
       </section>
 

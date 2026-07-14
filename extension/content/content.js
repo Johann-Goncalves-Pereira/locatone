@@ -3,8 +3,8 @@
 
 /**
  * Locatone content script — overrides page geolocation, timezone, language,
- * WebRTC ICE, sensors, keyboard, and prefers-color-scheme via Firefox
- * wrappedJSObject / exportFunction (CSP-safe).
+ * Intl NumberFormat, canvas font probes, WebRTC ICE, sensors, keyboard, and
+ * prefers-color-scheme via Firefox wrappedJSObject / exportFunction (CSP-safe).
  */
 (() => {
   const config = {
@@ -16,6 +16,49 @@
     locale: "en-US",
   };
 
+  /** Mirror ./web run-fonts.ts probes — hide scripts not matching spoof country. */
+  const FONT_MASK_PROBES = [
+    {
+      fonts: ["Hiragino Sans", "Yu Gothic", "Microsoft YaHei", "Noto Sans CJK"],
+      countryCodes: ["JP", "CN", "KR", "TW"],
+    },
+    {
+      fonts: ["Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR"],
+      countryCodes: ["KR"],
+    },
+    {
+      fonts: ["Tahoma", "Arabic Typesetting", "Noto Naskh Arabic", "Geeza Pro"],
+      countryCodes: ["SA", "EG", "AE"],
+    },
+    {
+      fonts: ["Arial Hebrew", "Lucida Grande", "Noto Sans Hebrew"],
+      countryCodes: ["IL"],
+    },
+    {
+      fonts: ["Thonburi", "Leelawadee UI", "Noto Sans Thai"],
+      countryCodes: ["TH"],
+    },
+    {
+      fonts: [
+        "Nirmala UI",
+        "Devanagari Sangam MN",
+        "Noto Sans Devanagari",
+      ],
+      countryCodes: ["IN"],
+    },
+    {
+      fonts: ["PT Sans", "Segoe UI", "Arial"],
+      countryCodes: ["RU"],
+    },
+  ];
+
+  const EMOJI_MASK_PROBES = [
+    { emoji: "🇧🇷", countryCodes: ["BR"] },
+    { emoji: "🇯🇵", countryCodes: ["JP"] },
+    { emoji: "🇩🇪", countryCodes: ["DE"] },
+    { emoji: "💴", countryCodes: ["JP"] },
+  ];
+
   const originals = {
     getCurrentPosition: null,
     watchPosition: null,
@@ -23,6 +66,9 @@
     permissionsQuery: null,
     getTimezoneOffset: null,
     resolvedOptions: null,
+    numberFormatResolvedOptions: null,
+    NumberFormat: null,
+    measureText: null,
     RTCPeerConnection: null,
     iceCandidateDesc: null,
     addEventListener: null,
@@ -38,6 +84,8 @@
     sensorsPatched: false,
     matchMediaPatched: false,
     keyboardPatched: false,
+    numberFormatPatched: false,
+    fontsPatched: false,
   };
 
   const IPV4_PATTERN =
@@ -163,6 +211,15 @@
   }
 
   let hostDefaultTimeZone = null;
+  let hostDefaultLocale = null;
+
+  function targetCountryFromLocale(locale) {
+    const parts = String(locale || "").replace("_", "-").split("-");
+    if (parts.length >= 2 && parts[1]) {
+      return parts[1].toUpperCase();
+    }
+    return "";
+  }
 
   function captureOriginals(win) {
     if (originals.captured) return;
@@ -184,6 +241,29 @@
         ).timeZone;
       } catch {
         hostDefaultTimeZone = null;
+      }
+      try {
+        originals.NumberFormat = win.Intl.NumberFormat;
+        originals.numberFormatResolvedOptions =
+          win.Intl.NumberFormat.prototype.resolvedOptions;
+        hostDefaultLocale = originals.numberFormatResolvedOptions.call(
+          new win.Intl.NumberFormat()
+        ).locale;
+      } catch {
+        originals.NumberFormat = null;
+        originals.numberFormatResolvedOptions = null;
+        hostDefaultLocale = null;
+      }
+      try {
+        if (
+          win.CanvasRenderingContext2D &&
+          win.CanvasRenderingContext2D.prototype
+        ) {
+          originals.measureText =
+            win.CanvasRenderingContext2D.prototype.measureText;
+        }
+      } catch {
+        originals.measureText = null;
       }
       if (typeof win.RTCPeerConnection === "function") {
         originals.RTCPeerConnection = win.RTCPeerConnection;
@@ -235,6 +315,17 @@
       if (originals.resolvedOptions) {
         win.Intl.DateTimeFormat.prototype.resolvedOptions = originals.resolvedOptions;
       }
+      if (originals.numberFormatResolvedOptions) {
+        win.Intl.NumberFormat.prototype.resolvedOptions =
+          originals.numberFormatResolvedOptions;
+      }
+      if (
+        originals.measureText &&
+        win.CanvasRenderingContext2D &&
+        win.CanvasRenderingContext2D.prototype
+      ) {
+        win.CanvasRenderingContext2D.prototype.measureText = originals.measureText;
+      }
       if (originals.RTCPeerConnection) {
         try {
           const proto = originals.RTCPeerConnection.prototype;
@@ -266,6 +357,8 @@
       originals.sensorsPatched = false;
       originals.matchMediaPatched = false;
       originals.keyboardPatched = false;
+      originals.numberFormatPatched = false;
+      originals.fontsPatched = false;
     } catch (e) {
       console.warn("Locatone restore failed", e);
     }
@@ -470,6 +563,162 @@
     } catch (e) {
       console.warn("Locatone sensor stubs failed", e);
     }
+  }
+
+  function installNumberFormat(win) {
+    if (
+      !originals.numberFormatResolvedOptions ||
+      originals.numberFormatPatched
+    ) {
+      return;
+    }
+
+    const NativeNF = originals.NumberFormat;
+    const origResolved = originals.numberFormatResolvedOptions;
+
+    try {
+      win.Intl.NumberFormat.prototype.resolvedOptions = exportFunction(
+        function () {
+          const o = origResolved.call(this);
+          if (!config.enabled || !config.locale) return o;
+          const spoof = String(config.locale);
+          const isDefault =
+            hostDefaultLocale == null ||
+            o.locale === hostDefaultLocale ||
+            o.locale === spoof;
+          if (isDefault) {
+            try {
+              o.locale = spoof;
+            } catch {
+              /* keep native */
+            }
+            if (NativeNF) {
+              try {
+                const tip = origResolved.call(new NativeNF(spoof));
+                if (tip && tip.numberingSystem) {
+                  o.numberingSystem = tip.numberingSystem;
+                }
+              } catch {
+                /* keep native numbering */
+              }
+            }
+          }
+          return o;
+        },
+        win
+      );
+      originals.numberFormatPatched = true;
+    } catch (e) {
+      console.warn("Locatone NumberFormat resolvedOptions failed", e);
+    }
+  }
+
+  function fontFamilyFromCss(fontCss) {
+    const css = String(fontCss || "");
+    const afterSize = css.replace(
+      /^\s*(?:(?:italic|oblique|normal|bold|bolder|lighter|\d{1,3})\s+)*[\d.]+(?:px|pt|em|rem|%)?\s+/i,
+      ""
+    );
+    const first = afterSize.split(",")[0] || "";
+    return first.replace(/^["']|["']$/g, "").trim();
+  }
+
+  function textMatchesProbeScript(text, probeFonts) {
+    // Cyrillic / CJK / Hangul / Arabic / Hebrew / Thai / Devanagari heuristics
+    // keyed by distinctive probe families so Arial Latin metrics stay intact.
+    const t = String(text || "");
+    const joined = probeFonts.join(" ").toLowerCase();
+    if (/hiragino|yu gothic|yahei|noto sans cjk/.test(joined)) {
+      return /[\u3040-\u30ff\u3400-\u9fff]/.test(t);
+    }
+    if (/gothic neo|malgun|noto sans kr/.test(joined)) {
+      return /[\uac00-\ud7af]/.test(t);
+    }
+    if (/arabic|geeza|naskh/.test(joined) || joined.includes("tahoma")) {
+      return /[\u0600-\u06ff]/.test(t);
+    }
+    if (/hebrew|noto sans hebrew|arial hebrew/.test(joined)) {
+      return /[\u0590-\u05ff]/.test(t);
+    }
+    if (/thonburi|leelawadee|noto sans thai/.test(joined)) {
+      return /[\u0e00-\u0e7f]/.test(t);
+    }
+    if (/nirmala|devanagari/.test(joined)) {
+      return /[\u0900-\u097f]/.test(t);
+    }
+    if (/pt sans|segoe ui|^arial$| arial /.test(" " + joined + " ")) {
+      return /[\u0400-\u04ff]/.test(t);
+    }
+    return false;
+  }
+
+  function shouldMaskFontMeasure(family, text, targetCountry) {
+    if (!targetCountry || !family) return false;
+    const lower = family.toLowerCase();
+    for (let i = 0; i < FONT_MASK_PROBES.length; i++) {
+      const probe = FONT_MASK_PROBES[i];
+      if (probe.countryCodes.indexOf(targetCountry) !== -1) continue;
+      let fontHit = false;
+      for (let j = 0; j < probe.fonts.length; j++) {
+        if (probe.fonts[j].toLowerCase() === lower) {
+          fontHit = true;
+          break;
+        }
+      }
+      if (fontHit && textMatchesProbeScript(text, probe.fonts)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function shouldMaskEmoji(text, targetCountry) {
+    if (!targetCountry || !text) return false;
+    for (let i = 0; i < EMOJI_MASK_PROBES.length; i++) {
+      const probe = EMOJI_MASK_PROBES[i];
+      if (probe.countryCodes.indexOf(targetCountry) !== -1) continue;
+      if (String(text).indexOf(probe.emoji) !== -1) return true;
+    }
+    return false;
+  }
+
+  function installFontMask(win) {
+    if (!originals.measureText || originals.fontsPatched) return;
+    if (
+      !win.CanvasRenderingContext2D ||
+      !win.CanvasRenderingContext2D.prototype
+    ) {
+      return;
+    }
+
+    const nativeMeasure = originals.measureText;
+
+    win.CanvasRenderingContext2D.prototype.measureText = exportFunction(
+      function (text) {
+        const target = targetCountryFromLocale(config.locale);
+        const str = String(text == null ? "" : text);
+        const family = fontFamilyFromCss(this.font);
+
+        if (shouldMaskFontMeasure(family, str, target)) {
+          const prev = this.font;
+          try {
+            this.font = "16px monospace";
+            return nativeMeasure.call(this, str);
+          } finally {
+            this.font = prev;
+          }
+        }
+
+        if (shouldMaskEmoji(str, target)) {
+          return nativeMeasure.call(this, "\uFFFD");
+        }
+
+        return nativeMeasure.call(this, str);
+      },
+      win
+    );
+
+    originals.fontsPatched = true;
   }
 
   function applyOverrides() {
@@ -706,6 +955,18 @@
       installSensorStubs(win);
     } catch (e) {
       console.warn("Locatone sensor install failed", e);
+    }
+
+    try {
+      installNumberFormat(win);
+    } catch (e) {
+      console.warn("Locatone NumberFormat install failed", e);
+    }
+
+    try {
+      installFontMask(win);
+    } catch (e) {
+      console.warn("Locatone font mask install failed", e);
     }
   }
 

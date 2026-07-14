@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+	countriesFromCurrency,
 	countriesFromLocale,
 	countriesFromTimezone,
 	countryFromTld,
@@ -11,6 +12,7 @@ describe('region-priors', () => {
 	it('maps known timezones to countries', () => {
 		expect(countriesFromTimezone('America/Sao_Paulo')).toEqual(['BR'])
 		expect(countriesFromTimezone('Europe/Berlin')).toEqual(['DE'])
+		expect(countriesFromTimezone('Europe/Tallinn')).toEqual(['EE'])
 	})
 
 	it('resolves IANA parent prefixes', () => {
@@ -23,6 +25,12 @@ describe('region-priors', () => {
 	it('maps locales to countries', () => {
 		expect(countriesFromLocale('pt-BR')).toEqual(['BR'])
 		expect(countriesFromLocale('ja-JP')).toEqual(['JP'])
+		expect(countriesFromLocale('et-EE')).toEqual(['EE'])
+	})
+
+	it('maps EUR to Baltic and Eurozone countries including EE', () => {
+		expect(countriesFromCurrency('EUR')).toContain('EE')
+		expect(countriesFromCurrency('EUR')).toContain('DE')
 	})
 
 	it('extracts country hints from TLDs', () => {

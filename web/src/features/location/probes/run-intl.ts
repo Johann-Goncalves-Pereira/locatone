@@ -48,6 +48,12 @@ const REGION_CURRENCY: Readonly<Record<string, string>> = {
 	IE: 'EUR',
 	FI: 'EUR',
 	GR: 'EUR',
+	EE: 'EUR',
+	LT: 'EUR',
+	LV: 'EUR',
+	SK: 'EUR',
+	SI: 'EUR',
+	HR: 'EUR',
 }
 
 export function runTimezoneProbe(): LocationSignal {

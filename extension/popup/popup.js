@@ -2,6 +2,55 @@
 
 const $ = (id) => document.getElementById(id);
 
+const REGION_CURRENCY = {
+  BR: "BRL",
+  US: "USD",
+  CA: "CAD",
+  MX: "MXN",
+  GB: "GBP",
+  JP: "JPY",
+  KR: "KRW",
+  CN: "CNY",
+  AU: "AUD",
+  NZ: "NZD",
+  AR: "ARS",
+  CL: "CLP",
+  CO: "COP",
+  PE: "PEN",
+  IN: "INR",
+  AE: "AED",
+  TR: "TRY",
+  RU: "RUB",
+  ZA: "ZAR",
+  CH: "CHF",
+  SE: "SEK",
+  NO: "NOK",
+  PL: "PLN",
+  TH: "THB",
+  ID: "IDR",
+  PH: "PHP",
+  SG: "SGD",
+  HK: "HKD",
+  TW: "TWD",
+  DE: "EUR",
+  FR: "EUR",
+  ES: "EUR",
+  IT: "EUR",
+  PT: "EUR",
+  NL: "EUR",
+  BE: "EUR",
+  AT: "EUR",
+  IE: "EUR",
+  FI: "EUR",
+  GR: "EUR",
+  EE: "EUR",
+  LT: "EUR",
+  LV: "EUR",
+  SK: "EUR",
+  SI: "EUR",
+  HR: "EUR",
+};
+
 const els = {
   input: $("input"),
   apply: $("apply"),
@@ -11,7 +60,10 @@ const els = {
   lng: $("lng"),
   timezone: $("timezone"),
   locale: $("locale"),
+  currency: $("currency"),
+  country: $("country"),
   proxyMode: $("proxyMode"),
+  proxyDetails: $("proxyDetails"),
   proxyHost: $("proxyHost"),
   proxyPort: $("proxyPort"),
   proxyUser: $("proxyUser"),
@@ -40,12 +92,30 @@ function proxyFromForm() {
   };
 }
 
+function syncProxyDetailsVisibility() {
+  const on = els.proxyMode.value !== "none";
+  els.proxyDetails.hidden = !on;
+}
+
 function fillProxy(proxy = {}) {
   els.proxyMode.value = proxy.mode || "none";
   els.proxyHost.value = proxy.host || "";
   els.proxyPort.value = proxy.port || "";
   els.proxyUser.value = proxy.username || "";
   els.proxyPass.value = proxy.password || "";
+  syncProxyDetailsVisibility();
+}
+
+function countryFromLocale(locale) {
+  const parts = String(locale || "").replace("_", "-").split("-");
+  if (parts.length >= 2 && parts[1]) return parts[1].toUpperCase();
+  return "—";
+}
+
+function currencyFromLocale(locale) {
+  const country = countryFromLocale(locale);
+  if (country === "—") return "—";
+  return REGION_CURRENCY[country] || "USD";
 }
 
 function showResolved(state) {
@@ -58,6 +128,8 @@ function showResolved(state) {
   els.lng.textContent = Number(state.lng).toFixed(6);
   els.timezone.textContent = state.timezone || "—";
   els.locale.textContent = state.locale || "—";
+  els.country.textContent = countryFromLocale(state.locale);
+  els.currency.textContent = currencyFromLocale(state.locale);
 }
 
 function statusLine(state) {
@@ -144,9 +216,9 @@ async function onToggle() {
 }
 
 async function onProxyChange() {
+  syncProxyDetailsVisibility();
   const proxy = proxyFromForm();
   if (proxy.mode !== "none" && (!proxy.host || !proxy.port)) {
-    // Don't save incomplete proxy; wait until Apply or toggle
     return;
   }
   const res = await browser.runtime.sendMessage({
