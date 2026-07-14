@@ -61,7 +61,7 @@ Temporary add-ons are removed when the browser restarts. For AMO/signing, pack v
 | Client-side IP lookup APIs | Rewrites responses (ipinfo, ip-api, ipapi.co, geojs, ipwho, …) |
 | Cloudflare `/cdn-cgi/trace` | Rewrites plain-text `loc` / `ip` / `colo` to spoofed country |
 | WebRTC ICE / STUN | Privacy `webRTCIPHandlingPolicy=disable_non_proxied_udp` + drop public ICE candidates on `RTCPeerConnection` prototype |
-| RTT lateration landmarks | Cancels requests to gov.br / nasa.gov / bund.de / digital.go.jp / gov.uk |
+| RTT lateration landmarks | Redirects gov.br / nasa.gov / bund.de / digital.go.jp / gov.uk to `data:` so CORS fails fast (no hang, no real RTT) |
 | Keyboard layout | Soft ambiguous QWERTY `getLayoutMap` |
 | Prefers-color-scheme | Forced from solar elevation at spoofed lat/lng |
 | Magnetometer / barometer / orientation | Constructors stubbed → unsupported |
@@ -93,7 +93,7 @@ Temporary add-ons are removed when the browser restarts. For AMO/signing, pack v
 - Already-running page scripts that cached the real timezone need a refresh.
 - Obscure IP-geo vendors are not all covered; extend [`lib/ip-mock.js`](lib/ip-mock.js).
 - Timezone is inferred from offline geographic regions (good for major areas, not cadastral-perfect).
-- True RTT geometry and exit IP still need a nearby proxy; landmark cancel only stops the `./web` lateration probe from leaking region.
+- True RTT geometry and exit IP still need a nearby proxy; landmark redirects only stop the `./web` lateration probe from measuring real region latency (without hard-cancel hangs).
 - Does not change OS location for native apps.
 
 ## Layout

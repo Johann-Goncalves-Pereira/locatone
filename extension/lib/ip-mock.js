@@ -339,8 +339,8 @@ const LocatoneIpMock = (() => {
     ];
   }
 
-  /** Landmark hosts used by ./web RTT lateration — cancel while spoofing. */
-  function rttCancelUrls() {
+  /** Landmark hosts used by ./web RTT lateration — redirect while spoofing. */
+  function rttNeutralizeUrls() {
     return [
       "*://www.gov.br/*",
       "*://gov.br/*",
@@ -361,7 +361,7 @@ const LocatoneIpMock = (() => {
     contentTypeFor,
     sanitizeResponseHeaders,
     urlsForListener,
-    rttCancelUrls,
+    rttNeutralizeUrls,
     hintsFromConfig,
   };
 })();

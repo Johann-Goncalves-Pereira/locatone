@@ -232,7 +232,18 @@ function onIpHeaders(details) {
     } catch (e) {
       console.warn("Locatone IP mock write failed", e);
     }
-    filter.close();
+    try {
+      filter.close();
+    } catch {
+      /* already closed */
+    }
+  };
+  filter.onerror = () => {
+    try {
+      filter.close();
+    } catch {
+      /* already closed */
+    }
   };
 
   return {
@@ -243,9 +254,14 @@ function onIpHeaders(details) {
   };
 }
 
+/**
+ * Neutralize RTT landmarks without hard-cancel.
+ * Cancel + no-cors HEAD can stall forever in Firefox and freeze runAllProbes.
+ * Redirect to data: so CORS fails fast → undefined RTT, scan continues.
+ */
 function onRttLandmark(details) {
   if (!state.enabled || state.lat == null) return {};
-  return { cancel: true };
+  return { redirectUrl: "data:text/plain," };
 }
 
 function setupIpRewrite() {
@@ -260,8 +276,8 @@ function setupIpRewrite() {
   );
 }
 
-function setupRttCancel() {
-  const urls = LocatoneIpMock.rttCancelUrls();
+function setupRttNeutralize() {
+  const urls = LocatoneIpMock.rttNeutralizeUrls();
   if (browser.webRequest.onBeforeRequest.hasListener(onRttLandmark)) {
     browser.webRequest.onBeforeRequest.removeListener(onRttLandmark);
   }
@@ -309,7 +325,7 @@ browser.runtime.onMessage.addListener((msg) => {
 
 loadState().then(() => {
   setupIpRewrite();
-  setupRttCancel();
+  setupRttNeutralize();
 });
 
 // Zen's built-in browser_action panel loads moz-extension popup URLs as a

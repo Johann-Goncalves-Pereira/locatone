@@ -384,40 +384,52 @@
   }
 
   function installKeyboard(win) {
-    if (
-      !originals.keyboardGetLayoutMap ||
-      !win.navigator.keyboard ||
-      originals.keyboardPatched
-    ) {
+    if (!win.navigator.keyboard || originals.keyboardPatched) {
       return;
     }
 
     const softMap = exportFunction(function () {
       // Ambiguous QWERTY sample → web keyboard prior stays soft / weak.
-      const map = new win.Map();
-      map.set("KeyA", "a");
-      map.set("KeyQ", "q");
-      map.set("KeyW", "w");
-      map.set("KeyZ", "z");
-      map.set("Digit1", "1");
-      map.set("Minus", "-");
-      map.set("Equal", "=");
-      map.set("BracketLeft", "[");
-      map.set("BracketRight", "]");
-      map.set("Semicolon", ";");
-      map.set("Quote", "'");
-      map.set("Backslash", "\\");
-      map.set("Comma", ",");
-      map.set("Period", ".");
-      map.set("Slash", "/");
-      return win.Promise.resolve(map);
+      try {
+        const map = new win.Map();
+        map.set("KeyA", "a");
+        map.set("KeyQ", "q");
+        map.set("KeyW", "w");
+        map.set("KeyZ", "z");
+        map.set("Digit1", "1");
+        map.set("Minus", "-");
+        map.set("Equal", "=");
+        map.set("BracketLeft", "[");
+        map.set("BracketRight", "]");
+        map.set("Semicolon", ";");
+        map.set("Quote", "'");
+        map.set("Backslash", "\\");
+        map.set("Comma", ",");
+        map.set("Period", ".");
+        map.set("Slash", "/");
+        return win.Promise.resolve(map);
+      } catch (e) {
+        // Never hang the page probe — fail fast instead.
+        return win.Promise.reject(e);
+      }
     }, win);
 
     try {
-      win.navigator.keyboard.getLayoutMap = softMap;
+      Object.defineProperty(win.navigator.keyboard, "getLayoutMap", {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: softMap,
+      });
       originals.keyboardPatched = true;
     } catch (e) {
-      console.warn("Locatone keyboard override failed", e);
+      try {
+        win.navigator.keyboard.getLayoutMap = softMap;
+        originals.keyboardPatched = true;
+      } catch (err) {
+        console.warn("Locatone keyboard override failed", err || e);
+        // Last resort: leave native API alone but it may hang; we tried.
+      }
     }
   }
 
@@ -472,31 +484,57 @@
     }
 
     function successPayload(options) {
-      const coords = new win.Object();
-      coords.latitude = config.lat;
-      coords.longitude = config.lng;
-      coords.accuracy = accuracyForOptions(options);
-      coords.altitude = null;
-      coords.altitudeAccuracy = null;
-      coords.heading = null;
-      coords.speed = null;
-
-      const pos = new win.Object();
-      pos.coords = coords;
-      pos.timestamp = Date.now();
-      return pos;
+      const coords = {
+        latitude: config.lat,
+        longitude: config.lng,
+        accuracy: accuracyForOptions(options),
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+      };
+      const pos = {
+        coords: coords,
+        timestamp: Date.now(),
+      };
+      if (typeof cloneInto === "function") {
+        return cloneInto(pos, win, { cloneFunctions: false });
+      }
+      const coordsObj = new win.Object();
+      coordsObj.latitude = coords.latitude;
+      coordsObj.longitude = coords.longitude;
+      coordsObj.accuracy = coords.accuracy;
+      coordsObj.altitude = null;
+      coordsObj.altitudeAccuracy = null;
+      coordsObj.heading = null;
+      coordsObj.speed = null;
+      const posObj = new win.Object();
+      posObj.coords = coordsObj;
+      posObj.timestamp = Date.now();
+      return posObj;
     }
 
     const getCurrentPosition = function (success, error, options) {
-      if (typeof success === "function") {
-        const pos = successPayload(options);
-        win.setTimeout(() => {
-          try {
-            success(pos);
-          } catch (err) {
-            if (typeof error === "function") error(err);
+      // Always complete — do not rely on native timeout when we own the method.
+      const finishOk = () => {
+        try {
+          if (typeof success === "function") {
+            success(successPayload(options));
           }
-        }, 1);
+        } catch (err) {
+          if (typeof error === "function") {
+            try {
+              error(err);
+            } catch {
+              /* ignore secondary throw */
+            }
+          }
+        }
+      };
+      try {
+        win.setTimeout(finishOk, 1);
+      } catch {
+        finishOk();
       }
     };
 
