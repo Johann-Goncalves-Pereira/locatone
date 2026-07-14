@@ -13,11 +13,11 @@ Guia para agentes de AI trabalhando neste repositório.
 - Vitest + Testing Library
 
 A feature `location` é o produto: forense multi-sinal (GPS, geo de rede, IP
-Cloudflare/ipwho/geojs, WebRTC/STUN IPv4+IPv6, Intl, RTT com lateração fraca,
-fontes/emoji, teclado, bússola, magnetômetro/WMM, barômetro, tema vs dia solar,
-deriva de relógio, conflitos) com fusão no mapa e painel de evidências.
-Densidade de UI local (painel selecionado, último GPS da sessão) usa Atom;
-`?panel=` fica na URL.
+Cloudflare/ipwho/geojs, edge Vercel, WebRTC/STUN IPv4+IPv6, Intl, Date/Worker
+leaks, RTT com lateração fraca, fontes/emoji, teclado, bússola/orientação,
+magnetômetro/WMM, barômetro, tema vs dia solar, deriva de relógio, sanidade de
+IP, conflitos) com fusão no mapa e painel de evidências. Densidade de UI local
+(painel selecionado, último GPS da sessão) usa Atom; `?panel=` fica na URL.
 
 ## Comandos
 

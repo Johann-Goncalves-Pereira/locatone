@@ -59,4 +59,54 @@ describe('runIpVsTzProbe', () => {
 		})
 		expect(result.summary).toMatch(/magnético|solar/i)
 	})
+
+	it('flags Date#toString and Worker leaks as conflict evidence', () => {
+		const result = runIpVsTzProbe([
+			signal({
+				id: 'ip_cloudflare',
+				status: 'ok',
+				confidence: 0.5,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'timezone',
+				status: 'ok',
+				confidence: 0.4,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'locale',
+				status: 'ok',
+				confidence: 0.3,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'date_string_tz',
+				status: 'ok',
+				confidence: 0.5,
+				regionHints: { countryCodes: ['BR'] },
+				raw: { offsetMismatch: true },
+			}),
+			signal({
+				id: 'worker_intl',
+				status: 'ok',
+				confidence: 0.5,
+				regionHints: { countryCodes: ['BR'] },
+				raw: { mismatch: true },
+			}),
+			signal({
+				id: 'ip_sanity',
+				status: 'ok',
+				confidence: 0.5,
+				raw: { suspicious: true },
+			}),
+		])
+
+		expect(result.raw).toMatchObject({
+			conflicted: true,
+			dateStringLeak: true,
+			workerMismatch: true,
+			ipSanityConflict: true,
+		})
+	})
 })

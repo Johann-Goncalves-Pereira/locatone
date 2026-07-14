@@ -1,10 +1,11 @@
 # Locatone
 
 Browser location forensics: run dozens of independent probes (GPS, network geo,
-IP providers, WebRTC/STUN, Intl priors, RTT lateration, fonts, keyboard,
-compass, magnetometer, barometer, solar theme, clock skew, and conflict checks),
-fuse the ones with coordinates, and plot every method on a full-bleed map beside
-a transparent evidence panel.
+IP providers, Vercel edge geo, WebRTC/STUN, Intl priors, Date/Worker leaks, RTT
+lateration, fonts, keyboard, compass / orientation, magnetometer, barometer,
+solar theme, clock skew, IP sanity, and conflict checks), fuse the ones with
+coordinates, and plot every method on a full-bleed map beside a transparent
+evidence panel.
 
 ## Stack
 
@@ -15,6 +16,7 @@ a transparent evidence panel.
 - Leaflet + react-leaflet (map)
 - Tailwind CSS v4
 - Vitest + Testing Library
+- Vercel `/api/edge-geo` for server-seen exit IP (production ace)
 
 ## Getting started
 
@@ -24,9 +26,17 @@ pnpm dev
 ```
 
 Copy `.env.example` to `.env` to override STUN / IP lookup bases. Only use the
-`VITE_` prefix for values safe to expose in the browser. Locatone v1 is
-client-only and uses public APIs (Cloudflare trace, ipwho.is, geojs.io, public
-STUN).
+`VITE_` prefix for values safe to expose in the browser. Client probes use
+public APIs (Cloudflare trace, ipwho.is, geojs.io, public STUN). On a Vercel
+deploy, `edge_geo` reads the visitor’s real TCP exit via edge headers — the
+Firefox extension cannot forge that without a matching proxy.
+
+### Competition fixture
+
+| Role         | Place            | Decimal                  |
+| ------------ | ---------------- | ------------------------ |
+| Truth        | Mandirituba - PR | `-25.872917, -49.410583` |
+| Spoof target | Tallinn, Estonia | `59.457528, 24.697444`   |
 
 ## Map & geolocation features
 
@@ -71,6 +81,7 @@ Probes are grouped the same way as the forensics panel.
 | `network_geo`  | Coarse Geolocation (`enableHighAccuracy: false`) — browser Wi‑Fi / cell triangulation, labeled honestly (not a separate Wi‑Fi API) |
 | `ip_ipwho`     | ipwho.is geo lookup → lat/lng, city, ISP, timezone hints                                                                           |
 | `ip_geojs`     | geojs.io geo JSON → lat/lng + region hints                                                                                         |
+| `edge_geo`     | Same-origin `/api/edge-geo` (Vercel edge headers) — real TCP exit; unsupported in local Vite                                       |
 | `webrtc_stun`  | WebRTC ICE against configurable STUN; collects reflexive IPv4 + IPv6, then geo-looks up candidates                                 |
 | `rtt_probe`    | Multi-endpoint RTT to regional landmarks → soft lateration (weak confidence)                                                       |
 | `storage_echo` | Echo of the previous successful GPS fix stored in this session                                                                     |
@@ -82,6 +93,8 @@ Probes are grouped the same way as the forensics panel.
 | `ip_cloudflare`      | Cloudflare `/cdn-cgi/trace` edge country / colo (coarse prior)        |
 | `timezone`           | IANA timezone → inferred country codes                                |
 | `locale`             | `navigator.languages` / resolved locale → language region priors      |
+| `date_string_tz`     | Parse `Date#toString()` / `toTimeString()` for engine TZ leaks        |
+| `worker_intl`        | Blob Worker Intl timezone + `navigator.language` (content-script gap) |
 | `intl_currency`      | `Intl` currency / numbering system → regional prior                   |
 | `intl_calendar`      | `Intl` calendar system → regional prior                               |
 | `font_locale`        | Detect installed regional / emoji font stacks as locale hints         |
@@ -91,23 +104,26 @@ Probes are grouped the same way as the forensics panel.
 
 #### Conflicts
 
-| Probe                | What it does                                              |
-| -------------------- | --------------------------------------------------------- |
-| `magnetometer`       | Device magnetic field vs World Magnetic Model (WMM) bands |
-| `tz_offset_conflict` | System clock offset vs claimed IANA timezone              |
-| `ip_vs_tz`           | Cross-check IP country(ies) × timezone × locale           |
+| Probe                  | What it does                                                     |
+| ---------------------- | ---------------------------------------------------------------- |
+| `magnetometer`         | Device magnetic field vs World Magnetic Model (WMM) bands        |
+| `tz_offset_conflict`   | System clock offset vs claimed IANA timezone                     |
+| `ip_sanity`            | Flags TEST-NET / documentation IPs in provider payloads          |
+| `storage_gps_conflict` | Session GPS vs live GPS far apart (≫150 km)                      |
+| `ip_vs_tz`             | Cross-check IP × timezone × locale + Date/Worker/IP-sanity leaks |
 
 #### Metadata / sensors
 
-| Probe              | What it does                                                     |
-| ------------------ | ---------------------------------------------------------------- |
-| `compass`          | Device orientation / heading                                     |
-| `barometer`        | Ambient pressure sensor, compared to GPS altitude when available |
-| `clock_skew`       | Local clock drift vs remote time                                 |
-| `network_info`     | Network Information API connection type (when available)         |
-| `permission_state` | Geolocation permission state                                     |
+| Probe                              | What it does                                                     |
+| ---------------------------------- | ---------------------------------------------------------------- | ------------- | --------- |
+| `compass`                          | Device orientation / heading (relative + absolute events)        |
+| `orientation_leak`                 | Legacy `deviceorientation` path often missed by Sensor stubs     |
+| `barometer`                        | Ambient pressure sensor, compared to GPS altitude when available |
+| `clock_skew`                       | Local clock drift vs remote time                                 |
+| `network_info`                     | Network Information API connection type (when available)         |
+| `permission_state`                 | Geolocation permission state                                     |
+| Each signal carries `status` (`ok` | `denied`                                                         | `unsupported` | `error`), |
 
-Each signal carries `status` (`ok` | `denied` | `unsupported` | `error`),
 `confidence` (0–1), optional coordinates / accuracy, `regionHints`, `summary`,
 and `raw` evidence for the panel.
 

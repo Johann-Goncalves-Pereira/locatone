@@ -418,6 +418,18 @@ select:focus {
   color: var(--loc-accent);
 }
 
+.edge-warn {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--loc-warning, #d4a017);
+  overflow-wrap: anywhere;
+}
+
+.edge-warn code {
+  font-size: 0.68rem;
+}
+
 .error {
   margin: 0;
   font-size: 0.74rem;

@@ -26,7 +26,7 @@
           id="input"
           rows="1"
           spellcheck="false"
-          placeholder="59.456619, 24.697315 · DMS · Maps URL"
+          placeholder="59.457528, 24.697444 · DMS · Maps URL"
         ></textarea>
       </label>
 
@@ -145,6 +145,10 @@
 
       <footer class="footer">
         <p id="status" class="status" role="status">Spoofing off</p>
+        <p id="edgeWarn" class="edge-warn" hidden>
+          Server-side edge geo still sees your real IP — enable a Tallinn-exit
+          proxy to beat Vercel <code>edge_geo</code>.
+        </p>
         <p id="error" class="error" hidden></p>
       </footer>
     </div>

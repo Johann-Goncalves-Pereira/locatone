@@ -6,6 +6,7 @@ export const ProbeId = Schema.Literal(
 	'ip_cloudflare',
 	'ip_ipwho',
 	'ip_geojs',
+	'edge_geo',
 	'timezone',
 	'locale',
 	'webrtc_stun',
@@ -15,12 +16,17 @@ export const ProbeId = Schema.Literal(
 	'font_locale',
 	'keyboard_layout',
 	'compass',
+	'orientation_leak',
 	'magnetometer',
 	'barometer',
 	'color_scheme_solar',
 	'clock_skew',
+	'date_string_tz',
+	'worker_intl',
 	'tz_offset_conflict',
 	'ip_vs_tz',
+	'ip_sanity',
+	'storage_gps_conflict',
 	'referrer_tld',
 	'storage_echo',
 	'network_info',
@@ -130,6 +136,19 @@ export const GeoJsResponse = Schema.Struct({
 	organization_name: Schema.optional(Schema.String),
 })
 export type GeoJsResponse = typeof GeoJsResponse.Type
+
+/** Same-origin Vercel edge geo (server-seen exit IP). */
+export const EdgeGeoResponse = Schema.Struct({
+	available: Schema.Boolean,
+	ip: Schema.optional(Schema.String),
+	country: Schema.optional(Schema.String),
+	region: Schema.optional(Schema.String),
+	city: Schema.optional(Schema.String),
+	latitude: Schema.optional(Schema.Number),
+	longitude: Schema.optional(Schema.Number),
+	reason: Schema.optional(Schema.String),
+})
+export type EdgeGeoResponse = typeof EdgeGeoResponse.Type
 
 export const StoredCoordinates = Schema.Struct({
 	lat: Schema.Number,

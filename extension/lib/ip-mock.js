@@ -78,8 +78,110 @@ const LocatoneIpMock = (() => {
     return null;
   }
 
-  function fakeIp() {
-    return "203.0.113.42";
+  /** Plausible public IPv4 lookalikes by ISO country (not TEST-NET). */
+  const FAKE_IP_BY_COUNTRY = {
+    EE: "90.190.142.88",
+    FI: "91.153.128.40",
+    LV: "62.85.20.50",
+    LT: "78.60.120.30",
+    SE: "83.255.40.20",
+    NO: "84.208.50.15",
+    DK: "80.198.30.12",
+    DE: "91.65.80.44",
+    FR: "90.84.120.66",
+    GB: "81.2.69.142",
+    IE: "87.198.40.22",
+    NL: "85.17.150.80",
+    BE: "91.183.60.18",
+    ES: "88.26.40.55",
+    PT: "85.240.30.41",
+    IT: "79.40.120.33",
+    CH: "85.1.40.28",
+    AT: "84.112.50.19",
+    PL: "83.24.60.70",
+    US: "72.14.201.10",
+    CA: "99.224.50.30",
+    BR: "187.45.112.40",
+    AR: "190.210.40.22",
+    JP: "126.40.50.60",
+    KR: "211.234.40.20",
+    CN: "123.125.40.18",
+    AU: "110.142.40.25",
+    IN: "117.205.40.33",
+    SG: "116.87.40.22",
+  };
+
+  const EU_COUNTRIES = new Set([
+    "EE",
+    "FI",
+    "LV",
+    "LT",
+    "SE",
+    "NO",
+    "DK",
+    "DE",
+    "FR",
+    "GB",
+    "IE",
+    "NL",
+    "BE",
+    "ES",
+    "PT",
+    "IT",
+    "CH",
+    "AT",
+    "PL",
+    "CZ",
+    "HU",
+    "RO",
+    "BG",
+    "GR",
+    "SK",
+    "SI",
+    "HR",
+  ]);
+
+  function fakeIp(country) {
+    return FAKE_IP_BY_COUNTRY[country] || FAKE_IP_BY_COUNTRY.EE;
+  }
+
+  function utcOffsetString(timezone) {
+    try {
+      if (typeof LocatoneTZ !== "undefined" && LocatoneTZ.getTimezoneOffsetMinutes) {
+        const west = LocatoneTZ.getTimezoneOffsetMinutes(timezone, new Date());
+        const east = -west;
+        const sign = east >= 0 ? "+" : "-";
+        const abs = Math.abs(east);
+        const h = String(Math.floor(abs / 60)).padStart(2, "0");
+        const m = String(abs % 60).padStart(2, "0");
+        return sign + h + m;
+      }
+    } catch {
+      /* fall through */
+    }
+    return "+0000";
+  }
+
+  function continentFor(country) {
+    if (EU_COUNTRIES.has(country)) {
+      return { code: "EU", name: "Europe" };
+    }
+    if (["US", "CA", "MX"].includes(country)) {
+      return { code: "NA", name: "North America" };
+    }
+    if (["BR", "AR", "CL", "CO", "PE"].includes(country)) {
+      return { code: "SA", name: "South America" };
+    }
+    if (["JP", "KR", "CN", "HK", "SG", "TH", "ID", "PH", "IN", "AE", "SA", "IL"].includes(country)) {
+      return { code: "AS", name: "Asia" };
+    }
+    if (["AU", "NZ"].includes(country)) {
+      return { code: "OC", name: "Oceania" };
+    }
+    if (["EG", "ZA", "NG", "KE", "MA"].includes(country)) {
+      return { code: "AF", name: "Africa" };
+    }
+    return { code: "EU", name: "Europe" };
   }
 
   function hintsFromConfig(cfg) {
@@ -94,11 +196,21 @@ const LocatoneIpMock = (() => {
             timezone: cfg.timezone || "UTC",
             locale: cfg.locale || "en-US",
           };
+    const continent = continentFor(h.country);
+    const utcOffset = utcOffsetString(h.timezone);
     return {
       ...h,
       lat: cfg.lat,
       lng: cfg.lng,
-      ip: fakeIp(),
+      ip: fakeIp(h.country),
+      continentCode: continent.code,
+      continentName: continent.name,
+      utcOffset,
+      utcOffsetColon:
+        utcOffset.slice(0, 3) + ":" + utcOffset.slice(3),
+      asn: "AS3249",
+      org: h.country === "EE" ? "Telia Eesti AS" : "Locatone Transit",
+      isp: h.country === "EE" ? "Telia Eesti" : "Locatone Transit",
     };
   }
 
@@ -140,7 +252,7 @@ const LocatoneIpMock = (() => {
           region: h.region,
           country: h.country,
           loc: `${h.lat},${h.lng}`,
-          org: "AS0000 Locatone Spoof",
+          org: h.asn + " " + h.org,
           postal: "00000",
           timezone: h.timezone,
         });
@@ -153,15 +265,15 @@ const LocatoneIpMock = (() => {
           country: h.countryName,
           country_code: h.country,
           country_code_iso3: h.country,
-          continent_code: "EU",
+          continent_code: h.continentCode,
           latitude: h.lat,
           longitude: h.lng,
           timezone: h.timezone,
-          utc_offset: "+0000",
-          currency: "EUR",
+          utc_offset: h.utcOffset,
+          currency: h.country === "BR" ? "BRL" : "EUR",
           languages: h.locale,
-          asn: "AS0000",
-          org: "Locatone Spoof",
+          asn: h.asn,
+          org: h.org,
         });
       case "ipapi_com":
         return JSON.stringify({
@@ -175,18 +287,18 @@ const LocatoneIpMock = (() => {
           lat: h.lat,
           lon: h.lng,
           timezone: h.timezone,
-          isp: "Locatone Spoof",
-          org: "Locatone Spoof",
-          as: "AS0000 Locatone",
+          isp: h.isp,
+          org: h.org,
+          as: h.asn + " " + h.org,
           query: h.ip,
         });
       case "geojs":
         return JSON.stringify({
-          organization_name: "Locatone Spoof",
+          organization_name: h.org,
           region: h.region,
           accuracy: 10,
-          asn: 0,
-          organization: "AS0000 Locatone Spoof",
+          asn: Number(String(h.asn).replace(/^AS/i, "")) || 3249,
+          organization: h.asn + " " + h.org,
           timezone: h.timezone,
           longitude: String(h.lng),
           country_code3: h.country,
@@ -195,14 +307,14 @@ const LocatoneIpMock = (() => {
           city: h.city,
           country: h.countryName,
           country_code: h.country,
-          continent_code: "EU",
+          continent_code: h.continentCode,
           latitude: String(h.lat),
         });
       case "freeipapi":
         return JSON.stringify({
           ipAddress: h.ip,
-          continentCode: "EU",
-          continentName: "Europe",
+          continentCode: h.continentCode,
+          continentName: h.continentName,
           countryCode: h.country,
           countryName: h.countryName,
           cityName: h.city,
@@ -217,8 +329,8 @@ const LocatoneIpMock = (() => {
           success: true,
           ip: h.ip,
           type: "IPv4",
-          continent: "Europe",
-          continent_code: "EU",
+          continent: h.continentName,
+          continent_code: h.continentCode,
           country: h.countryName,
           country_code: h.country,
           region: h.region,
@@ -227,9 +339,9 @@ const LocatoneIpMock = (() => {
           longitude: h.lng,
           timezone: {
             id: h.timezone,
-            utc: "+00:00",
+            utc: h.utcOffsetColon,
           },
-          connection: { isp: "Locatone Spoof" },
+          connection: { isp: h.isp, org: h.org, asn: h.asn },
         });
       case "freegeoip":
         return JSON.stringify({
@@ -259,8 +371,8 @@ const LocatoneIpMock = (() => {
       case "dbip":
         return JSON.stringify({
           ipAddress: h.ip,
-          continentCode: "EU",
-          continentName: "Europe",
+          continentCode: h.continentCode,
+          continentName: h.continentName,
           countryCode: h.country,
           countryName: h.countryName,
           stateProv: h.region,
@@ -269,15 +381,15 @@ const LocatoneIpMock = (() => {
       case "ipgeolocation":
         return JSON.stringify({
           ip: h.ip,
-          continent_code: "EU",
-          continent_name: "Europe",
+          continent_code: h.continentCode,
+          continent_name: h.continentName,
           country_code2: h.country,
           country_name: h.countryName,
           state_prov: h.region,
           city: h.city,
           latitude: String(h.lat),
           longitude: String(h.lng),
-          time_zone: { name: h.timezone },
+          time_zone: { name: h.timezone, offset: h.utcOffsetColon },
         });
       default:
         return JSON.stringify({
@@ -288,6 +400,7 @@ const LocatoneIpMock = (() => {
           lon: h.lng,
           timezone: h.timezone,
         });
+
     }
   }
 

@@ -3,8 +3,9 @@
 
 /**
  * Locatone content script — overrides page geolocation, timezone, language,
- * Intl NumberFormat, canvas font probes, WebRTC ICE, sensors, keyboard, and
- * prefers-color-scheme via Firefox wrappedJSObject / exportFunction (CSP-safe).
+ * Date string TZ, Worker Intl, Intl NumberFormat, canvas font probes, WebRTC
+ * ICE, sensors, deviceorientation, keyboard, and prefers-color-scheme via
+ * Firefox wrappedJSObject / exportFunction (CSP-safe).
  */
 (() => {
   const config = {
@@ -78,10 +79,20 @@
     Barometer: null,
     AbsoluteOrientationSensor: null,
     RelativeOrientationSensor: null,
+    dateToString: null,
+    dateToTimeString: null,
+    dateToLocaleString: null,
+    Worker: null,
+    SharedWorker: null,
+    windowAddEventListener: null,
+    windowRemoveEventListener: null,
     captured: false,
     languagePatched: false,
     webrtcPatched: false,
     sensorsPatched: false,
+    orientationPatched: false,
+    dateStringPatched: false,
+    workerPatched: false,
     matchMediaPatched: false,
     keyboardPatched: false,
     numberFormatPatched: false,
@@ -288,6 +299,13 @@
       originals.Barometer = win.Barometer;
       originals.AbsoluteOrientationSensor = win.AbsoluteOrientationSensor;
       originals.RelativeOrientationSensor = win.RelativeOrientationSensor;
+      originals.dateToString = win.Date.prototype.toString;
+      originals.dateToTimeString = win.Date.prototype.toTimeString;
+      originals.dateToLocaleString = win.Date.prototype.toLocaleString;
+      originals.Worker = win.Worker;
+      originals.SharedWorker = win.SharedWorker;
+      originals.windowAddEventListener = win.addEventListener;
+      originals.windowRemoveEventListener = win.removeEventListener;
       originals.captured = true;
     } catch (e) {
       console.warn("Locatone could not capture originals", e);
@@ -312,6 +330,30 @@
       if (originals.getTimezoneOffset) {
         win.Date.prototype.getTimezoneOffset = originals.getTimezoneOffset;
       }
+      if (originals.dateToString) {
+        win.Date.prototype.toString = originals.dateToString;
+      }
+      if (originals.dateToTimeString) {
+        win.Date.prototype.toTimeString = originals.dateToTimeString;
+      }
+      if (originals.dateToLocaleString) {
+        win.Date.prototype.toLocaleString = originals.dateToLocaleString;
+      }
+      if (originals.Worker) {
+        win.Worker = originals.Worker;
+      }
+      if (originals.SharedWorker) {
+        win.SharedWorker = originals.SharedWorker;
+      }
+      if (originals.windowAddEventListener) {
+        win.addEventListener = originals.windowAddEventListener;
+      }
+      if (originals.windowRemoveEventListener) {
+        win.removeEventListener = originals.windowRemoveEventListener;
+      }
+      originals.dateStringPatched = false;
+      originals.workerPatched = false;
+      originals.orientationPatched = false;
       if (originals.resolvedOptions) {
         win.Intl.DateTimeFormat.prototype.resolvedOptions = originals.resolvedOptions;
       }
@@ -562,6 +604,283 @@
       originals.sensorsPatched = true;
     } catch (e) {
       console.warn("Locatone sensor stubs failed", e);
+    }
+  }
+
+  function formatGmtLabel(offsetMinutesWest) {
+    const east = -offsetMinutesWest;
+    const sign = east >= 0 ? "+" : "-";
+    const abs = Math.abs(east);
+    const h = String(Math.floor(abs / 60)).padStart(2, "0");
+    const m = String(abs % 60).padStart(2, "0");
+    return "GMT" + sign + h + m;
+  }
+
+  function longTimeZoneName(timezone, date) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        timeZoneName: "long",
+      }).formatToParts(date);
+      const part = parts.find((p) => p.type === "timeZoneName");
+      return (part && part.value) || timezone;
+    } catch {
+      return timezone;
+    }
+  }
+
+  function formatPartsInZone(date, timezone) {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const map = {};
+    for (const p of fmt.formatToParts(date)) {
+      if (p.type !== "literal") map[p.type] = p.value;
+    }
+    const hour = map.hour === "24" ? "00" : map.hour;
+    return {
+      weekday: map.weekday || "Mon",
+      month: map.month || "Jan",
+      day: map.day || "01",
+      year: map.year || "1970",
+      time: hour + ":" + (map.minute || "00") + ":" + (map.second || "00"),
+    };
+  }
+
+  function clearSessionGpsEcho(win) {
+    try {
+      if (win.sessionStorage) {
+        win.sessionStorage.removeItem("locatone:last-gps");
+      }
+    } catch {
+      /* private mode */
+    }
+  }
+
+  function installDateStringOverrides(win) {
+    if (originals.dateStringPatched || !originals.dateToString) return;
+    try {
+      win.Date.prototype.toTimeString = exportFunction(function () {
+        if (!config.enabled || !config.timezone) {
+          return originals.dateToTimeString.call(this);
+        }
+        const ms = Number(this);
+        const date = new Date(Number.isFinite(ms) ? ms : Date.now());
+        const parts = formatPartsInZone(date, config.timezone);
+        const gmt = formatGmtLabel(
+          getOffsetMinutes(config.timezone, date.getTime())
+        );
+        return parts.time + " " + gmt;
+      }, win);
+
+      win.Date.prototype.toString = exportFunction(function () {
+        if (!config.enabled || !config.timezone) {
+          return originals.dateToString.call(this);
+        }
+        const ms = Number(this);
+        const date = new Date(Number.isFinite(ms) ? ms : Date.now());
+        const parts = formatPartsInZone(date, config.timezone);
+        const gmt = formatGmtLabel(
+          getOffsetMinutes(config.timezone, date.getTime())
+        );
+        const longName = longTimeZoneName(config.timezone, date);
+        return (
+          parts.weekday +
+          " " +
+          parts.month +
+          " " +
+          parts.day +
+          " " +
+          parts.year +
+          " " +
+          parts.time +
+          " " +
+          gmt +
+          " (" +
+          longName +
+          ")"
+        );
+      }, win);
+
+      if (originals.dateToLocaleString) {
+        win.Date.prototype.toLocaleString = exportFunction(function (
+          locales,
+          options
+        ) {
+          if (!config.enabled || !config.timezone) {
+            return originals.dateToLocaleString.call(this, locales, options);
+          }
+          const opts = options ? Object.assign({}, options) : {};
+          if (!opts.timeZone) opts.timeZone = config.timezone;
+          const loc = locales != null ? locales : config.locale || undefined;
+          return originals.dateToLocaleString.call(this, loc, opts);
+        }, win);
+      }
+      originals.dateStringPatched = true;
+    } catch (e) {
+      console.warn("Locatone Date string overrides failed", e);
+    }
+  }
+
+  function workerPreludeSource() {
+    const tz = JSON.stringify(config.timezone || "UTC");
+    const locale = JSON.stringify(config.locale || "en-US");
+    const offset = getOffsetMinutes(config.timezone || "UTC", Date.now());
+    return (
+      "(function(){try{" +
+      "var TZ=" +
+      tz +
+      ",LOCALE=" +
+      locale +
+      ",OFFSET=" +
+      offset +
+      ";" +
+      "Date.prototype.getTimezoneOffset=function(){return OFFSET;};" +
+      "var _ro=Intl.DateTimeFormat.prototype.resolvedOptions;" +
+      "Intl.DateTimeFormat.prototype.resolvedOptions=function(){var o=_ro.call(this);o.timeZone=TZ;try{o.locale=LOCALE;}catch(e){}return o;};" +
+      "try{Object.defineProperty(self.navigator,'language',{configurable:true,get:function(){return LOCALE;}});" +
+      "Object.defineProperty(self.navigator,'languages',{configurable:true,get:function(){return [LOCALE,String(LOCALE).split('-')[0]];}});}catch(e){}" +
+      "}catch(e){}})();\n"
+    );
+  }
+
+  function installWorkerOverrides(win) {
+    if (originals.workerPatched || !originals.Worker) return;
+    const NativeWorker = originals.Worker;
+    const NativeShared = originals.SharedWorker;
+
+    function wrapScriptUrl(scriptURL) {
+      const url = String(scriptURL);
+      if (!url.startsWith("blob:")) {
+        return null;
+      }
+      return url;
+    }
+
+    try {
+      win.Worker = exportFunction(function LocatoneWorker(scriptURL, options) {
+        const url = wrapScriptUrl(scriptURL);
+        if (!url || !config.enabled) {
+          return options === undefined
+            ? new NativeWorker(scriptURL)
+            : new NativeWorker(scriptURL, options);
+        }
+        // Synchronous blob rewrite is not possible; fetch via XHR sync
+        try {
+          const xhr = new win.XMLHttpRequest();
+          xhr.open("GET", url, false);
+          xhr.send(null);
+          const rewritten = new win.Blob(
+            [workerPreludeSource() + String(xhr.responseText || "")],
+            { type: "text/javascript" }
+          );
+          const obj = win.URL.createObjectURL(rewritten);
+          return options === undefined
+            ? new NativeWorker(obj)
+            : new NativeWorker(obj, options);
+        } catch (e) {
+          console.warn("Locatone Worker rewrite failed", e);
+          return options === undefined
+            ? new NativeWorker(scriptURL)
+            : new NativeWorker(scriptURL, options);
+        }
+      }, win);
+
+      if (NativeShared) {
+        win.SharedWorker = exportFunction(function LocatoneSharedWorker(
+          scriptURL,
+          options
+        ) {
+          const url = wrapScriptUrl(scriptURL);
+          if (!url || !config.enabled) {
+            return options === undefined
+              ? new NativeShared(scriptURL)
+              : new NativeShared(scriptURL, options);
+          }
+          try {
+            const xhr = new win.XMLHttpRequest();
+            xhr.open("GET", url, false);
+            xhr.send(null);
+            const rewritten = new win.Blob(
+              [workerPreludeSource() + String(xhr.responseText || "")],
+              { type: "text/javascript" }
+            );
+            const obj = win.URL.createObjectURL(rewritten);
+            return options === undefined
+              ? new NativeShared(obj)
+              : new NativeShared(obj, options);
+          } catch (e) {
+            console.warn("Locatone SharedWorker rewrite failed", e);
+            return options === undefined
+              ? new NativeShared(scriptURL)
+              : new NativeShared(scriptURL, options);
+          }
+        }, win);
+      }
+      originals.workerPatched = true;
+    } catch (e) {
+      console.warn("Locatone Worker overrides failed", e);
+    }
+  }
+
+  function installOrientationStub(win) {
+    if (originals.orientationPatched || !originals.windowAddEventListener) {
+      return;
+    }
+    try {
+      const origAdd = originals.windowAddEventListener.bind(win);
+      const origRemove = originals.windowRemoveEventListener
+        ? originals.windowRemoveEventListener.bind(win)
+        : null;
+      win.addEventListener = exportFunction(function (type, listener, options) {
+        if (
+          type === "deviceorientation" ||
+          type === "deviceorientationabsolute"
+        ) {
+          return undefined;
+        }
+        return origAdd(type, listener, options);
+      }, win);
+      if (origRemove) {
+        win.removeEventListener = exportFunction(function (
+          type,
+          listener,
+          options
+        ) {
+          if (
+            type === "deviceorientation" ||
+            type === "deviceorientationabsolute"
+          ) {
+            return undefined;
+          }
+          return origRemove(type, listener, options);
+        }, win);
+      }
+      try {
+        Object.defineProperty(win, "ondeviceorientation", {
+          configurable: true,
+          enumerable: true,
+          get: exportFunction(function () {
+            return null;
+          }, win),
+          set: exportFunction(function () {
+            /* swallow */
+          }, win),
+        });
+      } catch {
+        /* ignore */
+      }
+      originals.orientationPatched = true;
+    } catch (e) {
+      console.warn("Locatone orientation stub failed", e);
     }
   }
 
@@ -958,6 +1277,24 @@
     }
 
     try {
+      installOrientationStub(win);
+    } catch (e) {
+      console.warn("Locatone orientation install failed", e);
+    }
+
+    try {
+      installDateStringOverrides(win);
+    } catch (e) {
+      console.warn("Locatone Date string install failed", e);
+    }
+
+    try {
+      installWorkerOverrides(win);
+    } catch (e) {
+      console.warn("Locatone Worker install failed", e);
+    }
+
+    try {
       installNumberFormat(win);
     } catch (e) {
       console.warn("Locatone NumberFormat install failed", e);
@@ -968,6 +1305,8 @@
     } catch (e) {
       console.warn("Locatone font mask install failed", e);
     }
+
+    clearSessionGpsEcho(win);
   }
 
   function mergeConfig(src) {

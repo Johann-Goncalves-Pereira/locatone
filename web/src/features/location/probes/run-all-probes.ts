@@ -11,6 +11,8 @@ import {
 	runIpVsTzProbe,
 	runTzOffsetConflictProbe,
 } from '@features/location/probes/run-conflicts'
+import { runDateStringTzProbe } from '@features/location/probes/run-date-string-tz'
+import { runEdgeGeoProbe } from '@features/location/probes/run-edge-geo'
 import { runFontLocaleProbe } from '@features/location/probes/run-fonts'
 import {
 	runGpsProbe,
@@ -27,6 +29,7 @@ import {
 	runIpGeoJsProbe,
 	runIpIpwhoProbe,
 } from '@features/location/probes/run-ip'
+import { runIpSanityProbe } from '@features/location/probes/run-ip-sanity'
 import { runKeyboardLayoutProbe } from '@features/location/probes/run-keyboard'
 import { runMagnetometerProbe } from '@features/location/probes/run-magnetometer'
 import {
@@ -36,8 +39,11 @@ import {
 	runStorageEchoProbe,
 	writeStoredCoordinates,
 } from '@features/location/probes/run-misc'
+import { runOrientationLeakProbe } from '@features/location/probes/run-orientation-leak'
 import { runRttProbe } from '@features/location/probes/run-rtt'
+import { runStorageGpsConflictProbe } from '@features/location/probes/run-storage-conflict'
 import { runWebRtcStunProbe } from '@features/location/probes/run-webrtc-stun'
+import { runWorkerIntlProbe } from '@features/location/probes/run-worker-intl'
 import { makeSignal } from '@features/location/probes/signal-helpers'
 
 async function settleSignal(
@@ -89,7 +95,8 @@ function collectIpCountryCodes(
 						(signal.id === 'ip_cloudflare' ||
 							signal.id === 'ip_ipwho' ||
 							signal.id === 'ip_geojs' ||
-							signal.id === 'webrtc_stun') &&
+							signal.id === 'webrtc_stun' ||
+							signal.id === 'edge_geo') &&
 						signal.status === 'ok',
 				)
 				.flatMap(signal => signal.regionHints?.countryCodes ?? []),
@@ -106,6 +113,7 @@ export async function runAllProbes(
 		settleSignal('ip_cloudflare', runIpCloudflareProbe(signal)),
 		settleSignal('ip_ipwho', runIpIpwhoProbe(signal)),
 		settleSignal('ip_geojs', runIpGeoJsProbe(signal)),
+		settleSignal('edge_geo', runEdgeGeoProbe(signal)),
 		Promise.resolve(runTimezoneProbe()),
 		Promise.resolve(runLocaleProbe()),
 		settleSignal('webrtc_stun', runWebRtcStunProbe(signal)),
@@ -115,7 +123,10 @@ export async function runAllProbes(
 		Promise.resolve(runFontLocaleProbe()),
 		settleSignal('keyboard_layout', runKeyboardLayoutProbe()),
 		settleSignal('compass', runCompassProbe()),
+		settleSignal('orientation_leak', runOrientationLeakProbe()),
 		settleSignal('clock_skew', runClockSkewProbe(signal)),
+		Promise.resolve(runDateStringTzProbe()),
+		settleSignal('worker_intl', runWorkerIntlProbe()),
 		Promise.resolve(runTzOffsetConflictProbe()),
 		Promise.resolve(runReferrerTldProbe()),
 		Promise.resolve(runStorageEchoProbe()),
@@ -124,6 +135,8 @@ export async function runAllProbes(
 	])
 
 	const gps = parallel.find(item => item.id === 'gps')
+	const storageEcho = parallel.find(item => item.id === 'storage_echo')
+
 	if (gps?.status === 'ok' && gps.lat !== undefined && gps.lng !== undefined) {
 		writeStoredCoordinates({
 			lat: gps.lat,
@@ -153,9 +166,12 @@ export async function runAllProbes(
 				countryCodes: solarCountries,
 			}),
 		),
+		Promise.resolve(runStorageGpsConflictProbe(gps, storageEcho)),
 	])
 
-	const combined = [...parallel, ...dependent]
+	const withDependent = [...parallel, ...dependent]
+	const ipSanity = runIpSanityProbe(withDependent)
+	const combined = [...withDependent, ipSanity]
 	const conflict = runIpVsTzProbe(combined)
 	return [...combined, conflict]
 }

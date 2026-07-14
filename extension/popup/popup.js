@@ -72,6 +72,7 @@ const els = {
   proxyUser: $("proxyUser"),
   proxyPass: $("proxyPass"),
   status: $("status"),
+  edgeWarn: $("edgeWarn"),
   error: $("error"),
 };
 
@@ -160,15 +161,20 @@ function statusLine(state) {
   if (!state.enabled || state.lat == null) {
     els.status.classList.remove("on");
     els.status.textContent = "Spoofing off";
+    if (els.edgeWarn) els.edgeWarn.hidden = true;
     return;
   }
   const place = state.label || state.timezone || "custom";
-  const proxy =
-    state.proxy && state.proxy.mode !== "none"
-      ? `Proxy ${state.proxy.mode} ${state.proxy.host}:${state.proxy.port}`
-      : "Proxy off";
+  const proxyOn =
+    state.proxy && state.proxy.mode !== "none" && state.proxy.host;
+  const proxy = proxyOn
+    ? `Proxy ${state.proxy.mode} ${state.proxy.host}:${state.proxy.port}`
+    : "Proxy off";
   els.status.classList.add("on");
   els.status.textContent = `Spoofing ${place} · ${state.timezone} · ${proxy}`;
+  if (els.edgeWarn) {
+    els.edgeWarn.hidden = !!proxyOn;
+  }
 }
 
 function applyStateToForm(state) {

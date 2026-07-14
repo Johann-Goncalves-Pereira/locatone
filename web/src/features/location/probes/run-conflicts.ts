@@ -42,12 +42,14 @@ function expectedOffsetMinutes(
 }
 
 function readMismatchFlag(raw: unknown): boolean {
+	return readRawFlag(raw, 'mismatch') || readRawFlag(raw, 'conflicted')
+}
+
+function readRawFlag(raw: unknown, key: string): boolean {
 	if (typeof raw !== 'object' || raw === null) {
 		return false
 	}
-	const mismatch: unknown = Reflect.get(raw, 'mismatch')
-	const conflicted: unknown = Reflect.get(raw, 'conflicted')
-	return mismatch === true || conflicted === true
+	return Reflect.get(raw, key) === true
 }
 
 export function runTzOffsetConflictProbe(): LocationSignal {
@@ -90,14 +92,24 @@ export function runIpVsTzProbe(
 				(signal.id === 'ip_cloudflare' ||
 					signal.id === 'ip_ipwho' ||
 					signal.id === 'ip_geojs' ||
-					signal.id === 'webrtc_stun') &&
+					signal.id === 'webrtc_stun' ||
+					signal.id === 'edge_geo') &&
 				signal.status === 'ok',
 		)
 		.flatMap(signal => signal.regionHints?.countryCodes ?? [])
 
-	const tzCountries = signals
-		.filter(signal => signal.id === 'timezone' && signal.status === 'ok')
-		.flatMap(signal => signal.regionHints?.countryCodes ?? [])
+	const tzCountries = [
+		...signals
+			.filter(signal => signal.id === 'timezone' && signal.status === 'ok')
+			.flatMap(signal => signal.regionHints?.countryCodes ?? []),
+		...signals
+			.filter(
+				signal =>
+					(signal.id === 'date_string_tz' || signal.id === 'worker_intl') &&
+					signal.status === 'ok',
+			)
+			.flatMap(signal => signal.regionHints?.countryCodes ?? []),
+	]
 
 	const localeCountries = signals
 		.filter(signal => signal.id === 'locale' && signal.status === 'ok')
@@ -111,11 +123,33 @@ export function runIpVsTzProbe(
 
 	const magnetometer = signals.find(signal => signal.id === 'magnetometer')
 	const solar = signals.find(signal => signal.id === 'color_scheme_solar')
+	const ipSanity = signals.find(signal => signal.id === 'ip_sanity')
+	const storageConflict = signals.find(
+		signal => signal.id === 'storage_gps_conflict',
+	)
 	const magneticConflict =
 		magnetometer?.status === 'ok' && readMismatchFlag(magnetometer.raw)
 	const solarMismatch = solar?.status === 'ok' && readMismatchFlag(solar.raw)
+	const ipSanityConflict =
+		ipSanity?.status === 'ok' && readRawFlag(ipSanity.raw, 'suspicious')
+	const storageGpsConflict =
+		storageConflict?.status === 'ok' && readMismatchFlag(storageConflict.raw)
 
-	const conflicted = regionConflicted || magneticConflict || solarMismatch
+	const dateString = signals.find(signal => signal.id === 'date_string_tz')
+	const workerIntl = signals.find(signal => signal.id === 'worker_intl')
+	const dateStringLeak =
+		dateString?.status === 'ok' && readRawFlag(dateString.raw, 'offsetMismatch')
+	const workerMismatch =
+		workerIntl?.status === 'ok' && readRawFlag(workerIntl.raw, 'mismatch')
+
+	const conflicted =
+		regionConflicted ||
+		magneticConflict ||
+		solarMismatch ||
+		ipSanityConflict ||
+		storageGpsConflict ||
+		dateStringLeak ||
+		workerMismatch
 
 	const extras: string[] = []
 	if (magneticConflict) {
@@ -123,6 +157,18 @@ export function runIpVsTzProbe(
 	}
 	if (solarMismatch) {
 		extras.push('tema×dia solar')
+	}
+	if (ipSanityConflict) {
+		extras.push('IP documental')
+	}
+	if (storageGpsConflict) {
+		extras.push('GPS sessão×atual')
+	}
+	if (dateStringLeak) {
+		extras.push('Date#toString×Intl')
+	}
+	if (workerMismatch) {
+		extras.push('Worker×página')
 	}
 
 	return makeSignal({
@@ -133,7 +179,7 @@ export function runIpVsTzProbe(
 		summary: conflicted
 			? regionConflicted
 				? `Países sugeridos por IP, fuso e idioma não se intersectam${extras.length > 0 ? `; também ${extras.join(' e ')}` : ''} (VPN/proxy?).`
-				: `Indicadores sensoriais em conflito (${extras.join(', ')}).`
+				: `Indicadores em conflito (${extras.join(', ')}).`
 			: intersection.length > 0
 				? `Consenso parcial: ${intersection.join(', ')}.`
 				: 'Sinais insuficientes para cruzar origem.',
@@ -148,6 +194,10 @@ export function runIpVsTzProbe(
 			regionConflicted,
 			magneticConflict,
 			solarMismatch,
+			ipSanityConflict,
+			storageGpsConflict,
+			dateStringLeak,
+			workerMismatch,
 			conflicted,
 		},
 	})

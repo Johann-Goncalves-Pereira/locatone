@@ -95,9 +95,9 @@ export async function runCompassProbe(): Promise<LocationSignal> {
 	}
 
 	return await new Promise<LocationSignal>(resolve => {
+		let settled = false
 		const timeout = window.setTimeout(() => {
-			window.removeEventListener('deviceorientation', onOrientation)
-			resolve(
+			finish(
 				makeSignal({
 					id: 'compass',
 					label,
@@ -110,22 +110,32 @@ export async function runCompassProbe(): Promise<LocationSignal> {
 			)
 		}, 2_000)
 
-		function onOrientation(event: DeviceOrientationEvent) {
+		function finish(signalResult: LocationSignal) {
+			if (settled) {
+				return
+			}
+			settled = true
 			window.clearTimeout(timeout)
 			window.removeEventListener('deviceorientation', onOrientation)
+			window.removeEventListener('deviceorientationabsolute', onAbsolute)
+			resolve(signalResult)
+		}
+
+		function emit(event: DeviceOrientationEvent, kind: string) {
 			const alpha = event.alpha
-			resolve(
+			finish(
 				makeSignal({
 					id: 'compass',
 					label,
 					status: 'ok',
-					confidence: alpha === null ? 0.05 : 0.1,
+					confidence: alpha === null ? 0.05 : 0.12,
 					summary:
 						alpha === null
-							? 'Orientação sem heading magnético útil.'
-							: `Heading magnético ~${Math.round(alpha)}° (corroboração fraca).`,
+							? `Orientação (${kind}) sem heading magnético útil.`
+							: `Heading magnético ~${Math.round(alpha)}° via ${kind}.`,
 					raw: {
 						permission,
+						kind,
 						alpha,
 						beta: event.beta,
 						gamma: event.gamma,
@@ -135,6 +145,15 @@ export async function runCompassProbe(): Promise<LocationSignal> {
 			)
 		}
 
+		function onOrientation(event: DeviceOrientationEvent) {
+			emit(event, 'deviceorientation')
+		}
+
+		function onAbsolute(event: DeviceOrientationEvent) {
+			emit(event, 'deviceorientationabsolute')
+		}
+
 		window.addEventListener('deviceorientation', onOrientation)
+		window.addEventListener('deviceorientationabsolute', onAbsolute)
 	})
 }
