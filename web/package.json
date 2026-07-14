@@ -11,7 +11,7 @@
 		"build": "pnpm validate && vite build && pnpm check:bundle",
 		"build:vercel": "pnpm build",
 		"check:bundle": "node scripts/check-bundle-budget.mjs",
-		"preview": "vite preview",
+		"preview": "pnpm build && vite preview",
 		"tsc": "tsc -b",
 		"lint": "eslint . --max-warnings 0",
 		"lint:fix": "eslint . --fix --max-warnings 0",
