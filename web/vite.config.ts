@@ -38,6 +38,47 @@ function clientHeadersDevPlugin(): Plugin {
 	}
 }
 
+/** Local Vite stand-in for Vercel `/api/edge-geo` — no CDN geo headers in dev. */
+function edgeGeoDevPlugin(): Plugin {
+	return {
+		name: 'locatone-edge-geo-dev',
+		configureServer(server) {
+			server.middlewares.use('/api/edge-geo', (req, res) => {
+				res.setHeader('Cache-Control', 'no-store')
+				res.setHeader('Content-Type', 'application/json; charset=utf-8')
+				if (req.method !== 'GET' && req.method !== 'HEAD') {
+					res.statusCode = 405
+					res.end(
+						JSON.stringify({
+							available: false,
+							reason: 'method_not_allowed',
+						}),
+					)
+					return
+				}
+				const forwarded: unknown = Reflect.get(req.headers, 'x-forwarded-for')
+				let ip: string | undefined
+				if (typeof forwarded === 'string' && forwarded.length > 0) {
+					ip = forwarded.split(',')[0]?.trim()
+				} else {
+					const realIp: unknown = Reflect.get(req.headers, 'x-real-ip')
+					if (typeof realIp === 'string' && realIp.length > 0) {
+						ip = realIp
+					}
+				}
+				res.statusCode = 200
+				res.end(
+					JSON.stringify({
+						available: false,
+						reason: 'no_edge_headers',
+						...(ip !== undefined && ip.length > 0 ? { ip } : {}),
+					}),
+				)
+			})
+		},
+	}
+}
+
 export default defineConfig(({ mode }) => {
 	const isProduction = mode === 'production'
 
@@ -50,6 +91,7 @@ export default defineConfig(({ mode }) => {
 		},
 		plugins: [
 			clientHeadersDevPlugin(),
+			edgeGeoDevPlugin(),
 			tailwindcss(),
 			tanstackRouter({ target: 'react', autoCodeSplitting: true }),
 			react({

@@ -29,9 +29,32 @@ function haversineKm(
 	return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+/** Landmark RTT spread below this (ms) looks like extension neutralize / local redirect. */
+export const FLAT_RTT_SPREAD_MS = 10
+
+/**
+ * Ultra-flat landmark RTTs imply neutralised hosts (same local redirect target),
+ * not real regional latency — skip lateration coords in that case.
+ */
+export function isFlatLandmarkRtt(
+	landmarks: readonly Pick<RttLandmark, 'rttMs'>[],
+	spreadMs: number = FLAT_RTT_SPREAD_MS,
+): boolean {
+	const values = landmarks
+		.map(item => item.rttMs)
+		.filter(rtt => rtt > 0 && Number.isFinite(rtt))
+	if (values.length < 2) {
+		return false
+	}
+	const min = Math.min(...values)
+	const max = Math.max(...values)
+	return max - min < spreadMs
+}
+
 /**
  * Soft multilateration: weight closest landmarks by inverse distance residual.
  * Returns undefined unless at least two landmarks with measured RTT.
+ * Flat (near-identical) RTT clusters return undefined — treat as spoof evidence upstream.
  */
 export function softLaterateFromRtt(landmarks: readonly RttLandmark[]):
 	| {
@@ -48,6 +71,10 @@ export function softLaterateFromRtt(landmarks: readonly RttLandmark[]):
 		.slice(0, 4)
 
 	if (usable.length < 2) {
+		return undefined
+	}
+
+	if (isFlatLandmarkRtt(usable)) {
 		return undefined
 	}
 

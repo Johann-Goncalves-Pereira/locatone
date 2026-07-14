@@ -19,6 +19,7 @@ import {
 	runGpsProbe,
 	runNetworkGeoProbe,
 } from '@features/location/probes/run-geolocation'
+import { runHttpWorkerIntlProbe } from '@features/location/probes/run-http-worker-intl'
 import { runIframeIntlProbe } from '@features/location/probes/run-iframe-intl'
 import {
 	runIntlCalendarProbe,
@@ -28,8 +29,10 @@ import {
 } from '@features/location/probes/run-intl'
 import {
 	runIpCloudflareProbe,
+	runIpGeoIpLookupProbe,
 	runIpGeoJsProbe,
 	runIpIpwhoProbe,
+	runIpSeeIpProbe,
 } from '@features/location/probes/run-ip'
 import { runIpSanityProbe } from '@features/location/probes/run-ip-sanity'
 import { runKeyboardLayoutProbe } from '@features/location/probes/run-keyboard'
@@ -99,6 +102,8 @@ function collectIpCountryCodes(
 						(signal.id === 'ip_cloudflare' ||
 							signal.id === 'ip_ipwho' ||
 							signal.id === 'ip_geojs' ||
+							signal.id === 'ip_seeip' ||
+							signal.id === 'ip_geoiplookup' ||
 							signal.id === 'webrtc_stun' ||
 							signal.id === 'edge_geo') &&
 						signal.status === 'ok',
@@ -117,6 +122,8 @@ export async function runAllProbes(
 		settleSignal('ip_cloudflare', runIpCloudflareProbe(signal)),
 		settleSignal('ip_ipwho', runIpIpwhoProbe(signal)),
 		settleSignal('ip_geojs', runIpGeoJsProbe(signal)),
+		settleSignal('ip_seeip', runIpSeeIpProbe(signal)),
+		settleSignal('ip_geoiplookup', runIpGeoIpLookupProbe(signal)),
 		settleSignal('edge_geo', runEdgeGeoProbe(signal)),
 		Promise.resolve(runTimezoneProbe()),
 		Promise.resolve(runLocaleProbe()),
@@ -131,6 +138,7 @@ export async function runAllProbes(
 		settleSignal('clock_skew', runClockSkewProbe(signal)),
 		Promise.resolve(runDateStringTzProbe()),
 		settleSignal('worker_intl', runWorkerIntlProbe()),
+		settleSignal('http_worker_intl', runHttpWorkerIntlProbe()),
 		settleSignal('accept_language', runAcceptLanguageProbe(signal)),
 		settleSignal('speech_voices', runSpeechVoicesProbe()),
 		Promise.resolve(runIframeIntlProbe()),

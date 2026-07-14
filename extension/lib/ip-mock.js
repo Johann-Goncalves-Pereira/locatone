@@ -19,6 +19,8 @@ const LocatoneIpMock = (() => {
     { host: /geolocation-db\.com$/i, kind: "geolocationdb" },
     { host: /api\.db-ip\.com$/i, kind: "dbip" },
     { host: /ipgeolocation\.io$/i, kind: "ipgeolocation" },
+    { host: /seeip\.org$/i, kind: "seeip" },
+    { host: /geoiplookup\.io$/i, kind: "geoiplookup" },
   ];
 
   /** Plausible Cloudflare colo codes by ISO country. */
@@ -391,6 +393,31 @@ const LocatoneIpMock = (() => {
           longitude: String(h.lng),
           time_zone: { name: h.timezone, offset: h.utcOffsetColon },
         });
+      case "seeip":
+        return JSON.stringify({
+          ip: h.ip,
+          country: h.countryName,
+          country_code: h.country,
+          city: h.city,
+          region: h.region,
+          region_code: "",
+          latitude: h.lat,
+          longitude: h.lng,
+          timezone: h.timezone,
+          organization: h.org,
+        });
+      case "geoiplookup":
+        return JSON.stringify({
+          ip: h.ip,
+          country_code: h.country,
+          country_name: h.countryName,
+          region: h.region,
+          city: h.city,
+          latitude: h.lat,
+          longitude: h.lng,
+          timezone_name: h.timezone,
+          isp: h.isp,
+        });
       default:
         return JSON.stringify({
           ip: h.ip,
@@ -447,6 +474,10 @@ const LocatoneIpMock = (() => {
       "*://*.geolocation-db.com/*",
       "*://api.db-ip.com/*",
       "*://api.ipgeolocation.io/*",
+      "*://api.seeip.org/*",
+      "*://*.seeip.org/*",
+      "*://json.geoiplookup.io/*",
+      "*://*.geoiplookup.io/*",
       "*://cloudflare.com/*",
       "*://*.cloudflare.com/*",
     ];
@@ -457,6 +488,12 @@ const LocatoneIpMock = (() => {
     return [
       "*://www.gov.br/*",
       "*://gov.br/*",
+      "*://www.bcb.gov.br/*",
+      "*://bcb.gov.br/*",
+      "*://www.serpro.gov.br/*",
+      "*://serpro.gov.br/*",
+      "*://www.camara.leg.br/*",
+      "*://camara.leg.br/*",
       "*://www.nasa.gov/*",
       "*://nasa.gov/*",
       "*://www.bund.de/*",
@@ -465,6 +502,8 @@ const LocatoneIpMock = (() => {
       "*://digital.go.jp/*",
       "*://www.gov.uk/*",
       "*://gov.uk/*",
+      "*://www.riigiteataja.ee/*",
+      "*://riigiteataja.ee/*",
     ];
   }
 

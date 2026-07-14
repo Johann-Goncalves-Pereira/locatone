@@ -6,6 +6,8 @@ export const ProbeId = Schema.Literal(
 	'ip_cloudflare',
 	'ip_ipwho',
 	'ip_geojs',
+	'ip_seeip',
+	'ip_geoiplookup',
 	'edge_geo',
 	'timezone',
 	'locale',
@@ -23,6 +25,7 @@ export const ProbeId = Schema.Literal(
 	'clock_skew',
 	'date_string_tz',
 	'worker_intl',
+	'http_worker_intl',
 	'accept_language',
 	'speech_voices',
 	'iframe_intl',
@@ -140,6 +143,35 @@ export const GeoJsResponse = Schema.Struct({
 	organization_name: Schema.optional(Schema.String),
 })
 export type GeoJsResponse = typeof GeoJsResponse.Type
+
+/** seeip.org geoip JSON. */
+export const SeeIpResponse = Schema.Struct({
+	ip: Schema.optional(Schema.String),
+	country: Schema.optional(Schema.String),
+	country_code: Schema.optional(Schema.String),
+	city: Schema.optional(Schema.String),
+	region: Schema.optional(Schema.String),
+	region_code: Schema.optional(Schema.String),
+	latitude: Schema.optional(Schema.Number),
+	longitude: Schema.optional(Schema.Number),
+	timezone: Schema.optional(Schema.String),
+	organization: Schema.optional(Schema.String),
+})
+export type SeeIpResponse = typeof SeeIpResponse.Type
+
+/** json.geoiplookup.io response. */
+export const GeoIpLookupResponse = Schema.Struct({
+	ip: Schema.optional(Schema.String),
+	country_code: Schema.optional(Schema.String),
+	country_name: Schema.optional(Schema.String),
+	region: Schema.optional(Schema.String),
+	city: Schema.optional(Schema.String),
+	latitude: Schema.optional(Schema.Number),
+	longitude: Schema.optional(Schema.Number),
+	timezone_name: Schema.optional(Schema.String),
+	isp: Schema.optional(Schema.String),
+})
+export type GeoIpLookupResponse = typeof GeoIpLookupResponse.Type
 
 /** Same-origin Vercel edge geo (server-seen exit IP). */
 export const EdgeGeoResponse = Schema.Struct({

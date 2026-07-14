@@ -17,6 +17,12 @@ const Env = Schema.Struct({
 	VITE_CLOUDFLARE_TRACE_URL: Schema.optionalWith(Schema.URL, {
 		default: () => new URL('https://www.cloudflare.com/cdn-cgi/trace'),
 	}),
+	VITE_SEEIP_URL: Schema.optionalWith(Schema.URL, {
+		default: () => new URL('https://api.seeip.org/geoip'),
+	}),
+	VITE_GEOIPLOOKUP_URL: Schema.optionalWith(Schema.URL, {
+		default: () => new URL('https://json.geoiplookup.io/'),
+	}),
 	VITE_STUN_URL: Schema.optionalWith(Schema.String, {
 		default: () => 'stun:stun.l.google.com:19302',
 	}),

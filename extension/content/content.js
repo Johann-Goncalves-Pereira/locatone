@@ -94,6 +94,7 @@
     orientationPatched: false,
     dateStringPatched: false,
     workerPatched: false,
+    blobTrackingPatched: false,
     speechPatched: false,
     iframePatched: false,
     serviceWorkerPatched: false,
@@ -734,6 +735,11 @@
     }
   }
 
+  /** blob: URL → JS source captured at createObjectURL (avoids sync XHR to blob). */
+  const blobScriptByUrl = new Map();
+  /** Blob → concatenated string parts (WeakMap so GC still works). */
+  const blobStringParts = new WeakMap();
+
   function workerPreludeSource() {
     const tz = JSON.stringify(config.timezone || "UTC");
     const locale = JSON.stringify(config.locale || "en-US");
@@ -756,46 +762,150 @@
     );
   }
 
+  function extractBlobStringParts(parts) {
+    if (!parts || typeof parts.length !== "number") return null;
+    let text = "";
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (typeof part === "string") {
+        text += part;
+        continue;
+      }
+      return null;
+    }
+    return text;
+  }
+
+  function rewriteBlobWorkerUrl(win, scriptURL) {
+    const url = String(scriptURL);
+    if (!url.startsWith("blob:")) return null;
+
+    let source = blobScriptByUrl.get(url);
+    if (typeof source !== "string") {
+      try {
+        const xhr = new win.XMLHttpRequest();
+        xhr.open("GET", url, false);
+        xhr.send(null);
+        source = String(xhr.responseText || "");
+      } catch (e) {
+        console.debug("Locatone Worker blob XHR failed; cannot rewrite", e);
+        return null;
+      }
+    }
+    if (typeof source !== "string") return null;
+
+    const rewritten = new win.Blob(
+      [workerPreludeSource() + source],
+      { type: "text/javascript" }
+    );
+    return win.URL.createObjectURL(rewritten);
+  }
+
+  function markHttpWorkerScript(win, scriptURL) {
+    let abs = String(scriptURL);
+    try {
+      abs = new win.URL(String(scriptURL), win.location.href).href;
+    } catch {
+      /* keep relative */
+    }
+    if (!/^https?:/i.test(abs)) return;
+    try {
+      browser.runtime.sendMessage({
+        type: "locatone:markWorkerScript",
+        url: abs,
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function installBlobUrlTracking(win) {
+    if (originals.blobTrackingPatched) return;
+    try {
+      const NativeBlob = win.Blob;
+      const nativeCreateObjectURL = win.URL.createObjectURL.bind(win.URL);
+      const nativeRevokeObjectURL = win.URL.revokeObjectURL.bind(win.URL);
+
+      win.Blob = exportFunction(function LocatoneBlob(parts, options) {
+        const blob =
+          options === undefined
+            ? new NativeBlob(parts)
+            : new NativeBlob(parts, options);
+        const text = extractBlobStringParts(parts);
+        if (text !== null) {
+          try {
+            blobStringParts.set(blob, text);
+          } catch {
+            /* WeakMap set can fail across compartments */
+          }
+        }
+        return blob;
+      }, win);
+
+      win.URL.createObjectURL = exportFunction(function (obj) {
+        const url = nativeCreateObjectURL(obj);
+        try {
+          const text = blobStringParts.get(obj);
+          if (typeof text === "string") {
+            blobScriptByUrl.set(url, text);
+          }
+        } catch {
+          /* ignore */
+        }
+        return url;
+      }, win);
+
+      win.URL.revokeObjectURL = exportFunction(function (url) {
+        blobScriptByUrl.delete(String(url));
+        return nativeRevokeObjectURL(url);
+      }, win);
+
+      originals.blobTrackingPatched = true;
+    } catch (e) {
+      console.warn("Locatone Blob URL tracking failed", e);
+    }
+  }
+
   function installWorkerOverrides(win) {
     if (originals.workerPatched || !originals.Worker) return;
     const NativeWorker = originals.Worker;
     const NativeShared = originals.SharedWorker;
 
-    function wrapScriptUrl(scriptURL) {
-      const url = String(scriptURL);
-      if (!url.startsWith("blob:")) {
-        return null;
+    function constructWorker(NativeCtor, scriptURL, options) {
+      if (!config.enabled) {
+        return options === undefined
+          ? new NativeCtor(scriptURL)
+          : new NativeCtor(scriptURL, options);
       }
-      return url;
+
+      const url = String(scriptURL);
+      if (url.startsWith("blob:")) {
+        const rewrittenUrl = rewriteBlobWorkerUrl(win, url);
+        if (rewrittenUrl) {
+          return options === undefined
+            ? new NativeCtor(rewrittenUrl)
+            : new NativeCtor(rewrittenUrl, options);
+        }
+        console.debug(
+          "Locatone Worker rewrite fell back to native blob Worker"
+        );
+        return options === undefined
+          ? new NativeCtor(scriptURL)
+          : new NativeCtor(scriptURL, options);
+      }
+
+      // http(s) / same-origin workers — mark for background filterResponseData.
+      markHttpWorkerScript(win, scriptURL);
+      return options === undefined
+        ? new NativeCtor(scriptURL)
+        : new NativeCtor(scriptURL, options);
     }
 
     try {
+      installBlobUrlTracking(win);
+
       win.Worker = exportFunction(function LocatoneWorker(scriptURL, options) {
-        const url = wrapScriptUrl(scriptURL);
-        if (!url || !config.enabled) {
-          return options === undefined
-            ? new NativeWorker(scriptURL)
-            : new NativeWorker(scriptURL, options);
-        }
-        // Synchronous blob rewrite is not possible; fetch via XHR sync
-        try {
-          const xhr = new win.XMLHttpRequest();
-          xhr.open("GET", url, false);
-          xhr.send(null);
-          const rewritten = new win.Blob(
-            [workerPreludeSource() + String(xhr.responseText || "")],
-            { type: "text/javascript" }
-          );
-          const obj = win.URL.createObjectURL(rewritten);
-          return options === undefined
-            ? new NativeWorker(obj)
-            : new NativeWorker(obj, options);
-        } catch (e) {
-          console.warn("Locatone Worker rewrite failed", e);
-          return options === undefined
-            ? new NativeWorker(scriptURL)
-            : new NativeWorker(scriptURL, options);
-        }
+        return constructWorker(NativeWorker, scriptURL, options);
       }, win);
 
       if (NativeShared) {
@@ -803,30 +913,7 @@
           scriptURL,
           options
         ) {
-          const url = wrapScriptUrl(scriptURL);
-          if (!url || !config.enabled) {
-            return options === undefined
-              ? new NativeShared(scriptURL)
-              : new NativeShared(scriptURL, options);
-          }
-          try {
-            const xhr = new win.XMLHttpRequest();
-            xhr.open("GET", url, false);
-            xhr.send(null);
-            const rewritten = new win.Blob(
-              [workerPreludeSource() + String(xhr.responseText || "")],
-              { type: "text/javascript" }
-            );
-            const obj = win.URL.createObjectURL(rewritten);
-            return options === undefined
-              ? new NativeShared(obj)
-              : new NativeShared(obj, options);
-          } catch (e) {
-            console.warn("Locatone SharedWorker rewrite failed", e);
-            return options === undefined
-              ? new NativeShared(scriptURL)
-              : new NativeShared(scriptURL, options);
-          }
+          return constructWorker(NativeShared, scriptURL, options);
         }, win);
       }
       originals.workerPatched = true;
@@ -1033,120 +1120,41 @@
       if (!container || typeof container.register !== "function") return;
       const origRegister = container.register.bind(container);
 
-      function spoofedIntlReply() {
-        const locale = String(config.locale || "en-US");
-        const base = locale.split("-")[0] || "en";
+      /**
+       * Return the native register() Promise to the page.
+       * Wrapping with an async content-script Promise caused Firefox
+       * "Permission denied to access property then" on page .then().
+       * Intl spoofing relies on background filterResponseData prelude
+       * (always on for locatone-sw-intl-probe; marked URLs otherwise).
+       */
+      container.register = exportFunction(function (scriptURL, options) {
+        let abs = String(scriptURL);
         try {
-          const obj = new win.Object();
-          obj.timeZone = config.timezone || "UTC";
-          obj.language = locale;
-          const langs = new win.Array();
-          langs.push(locale);
-          langs.push(base);
-          obj.languages = langs;
-          return obj;
+          abs = new win.URL(String(scriptURL), win.location.href).href;
         } catch {
-          return {
-            timeZone: config.timezone || "UTC",
-            language: locale,
-            languages: [locale, base],
-          };
+          /* keep relative */
         }
-      }
 
-      function dispatchSpoofedWorkerMessage() {
-        try {
-          const reply = spoofedIntlReply();
-          const data =
-            typeof cloneInto === "function"
-              ? cloneInto(reply, win, { cloneFunctions: false })
-              : reply;
-          const evt = new win.MessageEvent("message", { data: data });
-          container.dispatchEvent(evt);
-        } catch (e) {
-          console.warn("Locatone SW message synthesize failed", e);
-        }
-      }
-
-      function wrapServiceWorker(sw) {
-        if (!sw || typeof sw.postMessage !== "function") return;
-        try {
-          if (sw.__locatonePmWrapped) return;
-          const origPm = sw.postMessage.bind(sw);
-          sw.postMessage = exportFunction(function (message, transfer) {
-            if (config.enabled) {
-              // Probe path: page listens on navigator.serviceWorker 'message'.
-              win.setTimeout(dispatchSpoofedWorkerMessage, 0);
-            }
-            try {
-              if (transfer === undefined) return origPm(message);
-              return origPm(message, transfer);
-            } catch {
-              return undefined;
-            }
-          }, win);
+        if (config.enabled) {
           try {
-            sw.__locatonePmWrapped = true;
+            browser.runtime.sendMessage({
+              type: "locatone:markSwScript",
+              url: abs,
+            });
           } catch {
             /* ignore */
           }
-        } catch (e) {
-          console.warn("Locatone SW postMessage wrap failed", e);
         }
-      }
 
-      function wrapRegistration(reg) {
-        if (!reg) return reg;
-        try {
-          wrapServiceWorker(reg.active);
-          wrapServiceWorker(reg.installing);
-          wrapServiceWorker(reg.waiting);
-          if (reg.installing) {
-            reg.installing.addEventListener("statechange", function () {
-              wrapServiceWorker(reg.active);
-              wrapServiceWorker(reg.installing);
-              wrapServiceWorker(reg.waiting);
-            });
-          }
-        } catch (e) {
-          console.warn("Locatone SW registration wrap failed", e);
+        if (!config.enabled) {
+          return options === undefined
+            ? origRegister(scriptURL)
+            : origRegister(scriptURL, options);
         }
-        return reg;
-      }
 
-      container.register = exportFunction(function (scriptURL, options) {
-        const run = async function () {
-          let abs = String(scriptURL);
-          try {
-            abs = new win.URL(String(scriptURL), win.location.href).href;
-          } catch {
-            /* keep relative */
-          }
-
-          if (config.enabled) {
-            try {
-              await browser.runtime.sendMessage({
-                type: "locatone:markSwScript",
-                url: abs,
-              });
-            } catch {
-              /* ignore */
-            }
-          }
-
-          const opts = options ? Object.assign({}, options) : {};
-          if (config.enabled) {
-            opts.updateViaCache = "none";
-          }
-
-          const reg =
-            options === undefined && !config.enabled
-              ? await origRegister(scriptURL)
-              : await origRegister(scriptURL, opts);
-          return wrapRegistration(reg);
-        };
-
-        return win.Promise.resolve(run());
+        const opts = options ? Object.assign({}, options) : {};
+        opts.updateViaCache = "none";
+        return origRegister(scriptURL, opts);
       }, win);
       originals.serviceWorkerPatched = true;
     } catch (e) {

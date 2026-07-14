@@ -73,18 +73,18 @@ sees your real ISP exit unless a matching VPN/proxy is already in use.
 | Permission state | `permissions.query({ name: "geolocation" })` → `granted` |
 | Timezone / locale | Overrides `Date#getTimezoneOffset`, `Intl.DateTimeFormat#resolvedOptions`, `navigator.language(s)` — offset matches IANA shortOffset (no `tz_offset_conflict`) |
 | `Date#toString` / `toTimeString` | Rebuilds GMT label + long zone name from spoofed IANA zone |
-| Worker Intl / language | Rewrites blob `Worker` / `SharedWorker` scripts with a TZ/locale prelude |
-| Service Worker Intl | Marks SW script URLs + `filterResponseData` prelude; synthesizes spoofed Intl replies to page `postMessage` probes |
+| Worker Intl / language | Rewrites blob `Worker` / `SharedWorker` via tracked blob source + prelude; HTTP(S) Workers marked for `filterResponseData` rewrite |
+| Service Worker Intl | Marks SW script URLs + `filterResponseData` prelude (native `register()` Promise — no X-ray `.then` clash) |
 | Iframe Intl | Hardens `appendChild` / `contentWindow` so `about:blank` races get spoofed Intl |
 | `Accept-Language` | Rewrites request header from spoofed locale via `webRequest.onBeforeSendHeaders` |
 | Speech voices | Filters `speechSynthesis.getVoices()` to spoof + English locales |
 | Currency / numbering (`intl_currency`) | Spoofs `Intl.NumberFormat` default locale + `resolvedOptions` |
 | Regional fonts (`font_locale`) | Best-effort: `CanvasRenderingContext2D#measureText` hides script/emoji probes that conflict with the spoofed country (cannot invent missing OS fonts) |
-| Client-side IP lookup APIs | Rewrites responses (ipinfo, ip-api, ipapi.co, geojs, ipwho, …) with plausible country IPs (not TEST-NET) |
+| Client-side IP lookup APIs | Rewrites responses (ipinfo, ip-api, ipapi.co, geojs, ipwho, seeip, geoiplookup, …) with plausible country IPs (not TEST-NET) |
 | Cloudflare `/cdn-cgi/trace` | Rewrites plain-text `loc` / `ip` / `colo` to spoofed country |
 | IP sanity (`ip_sanity`) | Avoids documentation ranges so the site’s TEST-NET detector stays quiet |
 | WebRTC ICE / STUN | Privacy `webRTCIPHandlingPolicy=disable_non_proxied_udp` + drop public ICE candidates on `RTCPeerConnection` prototype |
-| RTT lateration landmarks | Redirects landmark hosts to packaged `lib/empty.txt` so RTT settles without real region latency (no hard-cancel hang) |
+| RTT lateration landmarks | Redirects landmark hosts (gov.br, bcb, serpro, camara, nasa, bund, …) to packaged `lib/empty.txt` so RTT settles without real region latency |
 | Keyboard layout | Soft ambiguous QWERTY `getLayoutMap` |
 | Prefers-color-scheme | Forced from solar elevation at spoofed lat/lng |
 | Magnetometer / barometer / orientation sensors | Constructors stubbed → unsupported |

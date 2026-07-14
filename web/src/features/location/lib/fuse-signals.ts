@@ -34,6 +34,30 @@ function collectCountryCodes(
 }
 
 export function fuseSignals(signals: readonly LocationSignal[]): FusedLocation {
+	const conflictMeta = signals.find(signal => signal.id === 'ip_vs_tz')
+	const workerBrLeak =
+		conflictMeta?.status === 'ok' &&
+		typeof conflictMeta.raw === 'object' &&
+		conflictMeta.raw !== null &&
+		Reflect.get(conflictMeta.raw, 'workerBrLeak') === true
+
+	// OS Worker timezone beats spoofed GPS / VPN IP city when BR leaks.
+	if (workerBrLeak) {
+		const centroid = countryCentroid('BR')
+		if (centroid !== undefined) {
+			return {
+				lat: centroid.lat,
+				lng: centroid.lng,
+				accuracyMeters: 450_000,
+				agreement: 'conflicted',
+				summary:
+					'GPS/VPN spoofados detectados: Worker/OS com America/Sao_Paulo → prioridade BR.',
+				confidence: 0.5,
+				sourceIds: signals.filter(s => s.status === 'ok').map(s => s.id),
+			}
+		}
+	}
+
 	const withCoords = signals.filter(signal => {
 		if (
 			signal.status !== 'ok' ||

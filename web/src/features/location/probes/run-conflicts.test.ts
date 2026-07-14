@@ -166,4 +166,53 @@ describe('runIpVsTzProbe', () => {
 		})
 		expect(result.summary).toMatch(/Accept-Language|vozes|iframe|SW/i)
 	})
+
+	it('flags HTTP Worker BR leak and flat RTT neutralize', () => {
+		const result = runIpVsTzProbe([
+			signal({
+				id: 'ip_cloudflare',
+				status: 'ok',
+				confidence: 0.5,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'timezone',
+				status: 'ok',
+				confidence: 0.4,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'locale',
+				status: 'ok',
+				confidence: 0.3,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'http_worker_intl',
+				status: 'ok',
+				confidence: 0.58,
+				regionHints: {
+					countryCodes: ['BR'],
+					timezone: 'America/Sao_Paulo',
+				},
+				raw: { mismatch: true },
+			}),
+			signal({
+				id: 'rtt_probe',
+				status: 'ok',
+				confidence: 0.38,
+				raw: { flatNeutralized: true },
+			}),
+		])
+
+		expect(result.raw).toMatchObject({
+			conflicted: true,
+			httpWorkerMismatch: true,
+			workerBrLeak: true,
+			rttNeutralized: true,
+		})
+		expect(result.regionHints?.countryCodes).toContain('BR')
+		expect(result.confidence).toBeGreaterThanOrEqual(0.55)
+		expect(result.summary).toMatch(/Worker|RTT/i)
+	})
 })

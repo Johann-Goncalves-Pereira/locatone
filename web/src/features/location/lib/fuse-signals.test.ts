@@ -115,4 +115,49 @@ describe('fuseSignals', () => {
 		expect(fused.lat ?? 0).toBeCloseTo(-14.2, 0)
 		expect(fused.lng ?? 0).toBeCloseTo(-51.9, 0)
 	})
+
+	it('prefers BR centroid when Worker OS timezone leaks Brazil', () => {
+		const fused = fuseSignals([
+			signal({
+				id: 'gps',
+				status: 'ok',
+				confidence: 0.98,
+				lat: 59.457,
+				lng: 24.697,
+				accuracyMeters: 10,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'ip_ipwho',
+				status: 'ok',
+				confidence: 0.6,
+				lat: 59.4,
+				lng: 24.7,
+				accuracyMeters: 80_000,
+				regionHints: { countryCodes: ['EE'] },
+			}),
+			signal({
+				id: 'http_worker_intl',
+				status: 'ok',
+				confidence: 0.58,
+				regionHints: {
+					countryCodes: ['BR'],
+					timezone: 'America/Sao_Paulo',
+				},
+				raw: { mismatch: true },
+			}),
+			signal({
+				id: 'ip_vs_tz',
+				status: 'ok',
+				confidence: 0.55,
+				regionHints: { countryCodes: ['BR'] },
+				raw: { workerBrLeak: true, conflicted: true },
+			}),
+		])
+
+		expect(fused.agreement).toBe('conflicted')
+		expect(fused.summary).toMatch(/America\/Sao_Paulo|prioridade BR/i)
+		expect(fused.lat ?? 0).toBeCloseTo(-14.2, 0)
+		expect(fused.lng ?? 0).toBeCloseTo(-51.9, 0)
+	})
 })

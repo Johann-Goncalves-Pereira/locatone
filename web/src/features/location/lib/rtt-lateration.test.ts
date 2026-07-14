@@ -57,4 +57,32 @@ describe('rtt-lateration', () => {
 			]),
 		).toBeUndefined()
 	})
+
+	it('skips lateration when landmark RTTs are flat (neutralized)', () => {
+		expect(
+			softLaterateFromRtt([
+				{
+					id: 'br',
+					lat: -15.78,
+					lng: -47.93,
+					countryCodes: ['BR'],
+					rttMs: 71,
+				},
+				{
+					id: 'us',
+					lat: 38.88,
+					lng: -77.01,
+					countryCodes: ['US'],
+					rttMs: 72,
+				},
+				{
+					id: 'de',
+					lat: 52.52,
+					lng: 13.4,
+					countryCodes: ['DE'],
+					rttMs: 72,
+				},
+			]),
+		).toBeUndefined()
+	})
 })

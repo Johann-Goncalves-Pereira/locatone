@@ -337,29 +337,34 @@ function setupAcceptLanguageRewrite() {
 }
 
 /**
- * Pending Service Worker script URLs to prepend with Intl/locale prelude.
- * Content script marks URLs on register(); also always covers Locatone probe.
+ * Pending Worker / Service Worker script URLs to prepend with Intl/locale prelude.
+ * Content script marks URLs on register() / new Worker(); always covers Locatone probes.
  */
-const swRewriteUntil = new Map();
+const scriptRewriteUntil = new Map();
 
-function markServiceWorkerScript(url) {
+function markRewriteScript(url) {
   if (!url) return;
-  swRewriteUntil.set(String(url), Date.now() + 30_000);
+  scriptRewriteUntil.set(String(url), Date.now() + 30_000);
 }
 
-function shouldRewriteServiceWorker(url) {
+function shouldRewriteWorkerScript(url) {
   const u = String(url || "");
-  if (u.includes("locatone-sw-intl-probe")) return true;
-  const until = swRewriteUntil.get(u);
+  if (
+    u.includes("locatone-sw-intl-probe") ||
+    u.includes("locatone-http-worker-intl-probe")
+  ) {
+    return true;
+  }
+  const until = scriptRewriteUntil.get(u);
   if (until == null) return false;
   if (Date.now() > until) {
-    swRewriteUntil.delete(u);
+    scriptRewriteUntil.delete(u);
     return false;
   }
   return true;
 }
 
-function serviceWorkerPrelude() {
+function workerScriptPrelude() {
   const tz = JSON.stringify(state.timezone || "UTC");
   const locale = JSON.stringify(state.locale || "en-US");
   let offset = 0;
@@ -393,9 +398,9 @@ function serviceWorkerPrelude() {
   );
 }
 
-function onServiceWorkerHeaders(details) {
+function onWorkerScriptHeaders(details) {
   if (!state.enabled || state.lat == null) return {};
-  if (!shouldRewriteServiceWorker(details.url)) return {};
+  if (!shouldRewriteWorkerScript(details.url)) return {};
 
   const filter = browser.webRequest.filterResponseData(details.requestId);
   const encoder = new TextEncoder();
@@ -416,9 +421,9 @@ function onServiceWorkerHeaders(details) {
         off += c.length;
       }
       const body = decoder.decode(merged);
-      filter.write(encoder.encode(serviceWorkerPrelude() + body));
+      filter.write(encoder.encode(workerScriptPrelude() + body));
     } catch (e) {
-      console.warn("Locatone SW rewrite failed", e);
+      console.warn("Locatone Worker/SW rewrite failed", e);
       try {
         for (const c of chunks) filter.write(c);
       } catch {
@@ -430,7 +435,7 @@ function onServiceWorkerHeaders(details) {
     } catch {
       /* already closed */
     }
-    swRewriteUntil.delete(details.url);
+    scriptRewriteUntil.delete(details.url);
   };
   filter.onerror = () => {
     try {
@@ -446,13 +451,13 @@ function onServiceWorkerHeaders(details) {
   return { responseHeaders: headers };
 }
 
-function setupServiceWorkerRewrite() {
-  if (browser.webRequest.onHeadersReceived.hasListener(onServiceWorkerHeaders)) {
-    browser.webRequest.onHeadersReceived.removeListener(onServiceWorkerHeaders);
+function setupWorkerScriptRewrite() {
+  if (browser.webRequest.onHeadersReceived.hasListener(onWorkerScriptHeaders)) {
+    browser.webRequest.onHeadersReceived.removeListener(onWorkerScriptHeaders);
   }
   // No `types: ["script"]` — Firefox often does not classify SW installs as script.
   browser.webRequest.onHeadersReceived.addListener(
-    onServiceWorkerHeaders,
+    onWorkerScriptHeaders,
     { urls: ["<all_urls>"] },
     ["blocking", "responseHeaders"]
   );
@@ -465,8 +470,11 @@ browser.runtime.onMessage.addListener((msg) => {
     return Promise.resolve(state);
   }
 
-  if (msg.type === "locatone:markSwScript") {
-    markServiceWorkerScript(msg.url);
+  if (
+    msg.type === "locatone:markSwScript" ||
+    msg.type === "locatone:markWorkerScript"
+  ) {
+    markRewriteScript(msg.url);
     return Promise.resolve({ ok: true });
   }
 
@@ -505,7 +513,7 @@ loadState().then(() => {
   setupIpRewrite();
   setupRttNeutralize();
   setupAcceptLanguageRewrite();
-  setupServiceWorkerRewrite();
+  setupWorkerScriptRewrite();
 });
 
 browser.storage.onChanged.addListener((changes, area) => {

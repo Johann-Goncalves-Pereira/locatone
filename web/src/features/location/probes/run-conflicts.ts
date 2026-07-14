@@ -92,6 +92,8 @@ export function runIpVsTzProbe(
 				(signal.id === 'ip_cloudflare' ||
 					signal.id === 'ip_ipwho' ||
 					signal.id === 'ip_geojs' ||
+					signal.id === 'ip_seeip' ||
+					signal.id === 'ip_geoiplookup' ||
 					signal.id === 'webrtc_stun' ||
 					signal.id === 'edge_geo') &&
 				signal.status === 'ok',
@@ -107,6 +109,7 @@ export function runIpVsTzProbe(
 				signal =>
 					(signal.id === 'date_string_tz' ||
 						signal.id === 'worker_intl' ||
+						signal.id === 'http_worker_intl' ||
 						signal.id === 'iframe_intl' ||
 						signal.id === 'service_worker_intl') &&
 					signal.status === 'ok',
@@ -146,17 +149,24 @@ export function runIpVsTzProbe(
 
 	const dateString = signals.find(signal => signal.id === 'date_string_tz')
 	const workerIntl = signals.find(signal => signal.id === 'worker_intl')
+	const httpWorkerIntl = signals.find(
+		signal => signal.id === 'http_worker_intl',
+	)
 	const iframeIntl = signals.find(signal => signal.id === 'iframe_intl')
 	const serviceWorkerIntl = signals.find(
 		signal => signal.id === 'service_worker_intl',
 	)
 	const acceptLanguage = signals.find(signal => signal.id === 'accept_language')
 	const speechVoices = signals.find(signal => signal.id === 'speech_voices')
+	const rttProbe = signals.find(signal => signal.id === 'rtt_probe')
 
 	const dateStringLeak =
 		dateString?.status === 'ok' && readRawFlag(dateString.raw, 'offsetMismatch')
 	const workerMismatch =
 		workerIntl?.status === 'ok' && readRawFlag(workerIntl.raw, 'mismatch')
+	const httpWorkerMismatch =
+		httpWorkerIntl?.status === 'ok' &&
+		readRawFlag(httpWorkerIntl.raw, 'mismatch')
 	const iframeMismatch =
 		iframeIntl?.status === 'ok' && readRawFlag(iframeIntl.raw, 'mismatch')
 	const serviceWorkerMismatch =
@@ -167,6 +177,15 @@ export function runIpVsTzProbe(
 		readRawFlag(acceptLanguage.raw, 'mismatch')
 	const speechBrazilLeak =
 		speechVoices?.status === 'ok' && readRawFlag(speechVoices.raw, 'hasPtBr')
+	const rttNeutralized =
+		rttProbe?.status === 'ok' && readRawFlag(rttProbe.raw, 'flatNeutralized')
+
+	const workerBrLeak =
+		(workerMismatch || httpWorkerMismatch) &&
+		[
+			...(workerIntl?.regionHints?.countryCodes ?? []),
+			...(httpWorkerIntl?.regionHints?.countryCodes ?? []),
+		].includes('BR')
 
 	const conflicted =
 		regionConflicted ||
@@ -176,10 +195,12 @@ export function runIpVsTzProbe(
 		storageGpsConflict ||
 		dateStringLeak ||
 		workerMismatch ||
+		httpWorkerMismatch ||
 		iframeMismatch ||
 		serviceWorkerMismatch ||
 		acceptLanguageMismatch ||
-		speechBrazilLeak
+		speechBrazilLeak ||
+		rttNeutralized
 
 	const extras: string[] = []
 	if (magneticConflict) {
@@ -200,6 +221,12 @@ export function runIpVsTzProbe(
 	if (workerMismatch) {
 		extras.push('Worker×página')
 	}
+	if (httpWorkerMismatch) {
+		extras.push('HTTP Worker×página')
+	}
+	if (workerBrLeak) {
+		extras.push('Worker BR')
+	}
 	if (iframeMismatch) {
 		extras.push('iframe×página')
 	}
@@ -212,21 +239,32 @@ export function runIpVsTzProbe(
 	if (speechBrazilLeak) {
 		extras.push('vozes pt-BR')
 	}
+	if (rttNeutralized) {
+		extras.push('RTT neutralizado')
+	}
+
+	const confidence = workerBrLeak ? 0.55 : conflicted ? 0.4 : 0.25
 
 	return makeSignal({
 		id: 'ip_vs_tz',
 		label,
 		status: 'ok',
-		confidence: conflicted ? 0.4 : 0.25,
+		confidence,
 		summary: conflicted
 			? regionConflicted
 				? `Países sugeridos por IP, fuso e idioma não se intersectam${extras.length > 0 ? `; também ${extras.join(' e ')}` : ''} (VPN/proxy?).`
-				: `Indicadores em conflito (${extras.join(', ')}).`
+				: workerBrLeak
+					? `Vazamento BR via Worker (America/Sao_Paulo) vs página/VPN: ${extras.join(', ')}.`
+					: `Indicadores em conflito (${extras.join(', ')}).`
 			: intersection.length > 0
 				? `Consenso parcial: ${intersection.join(', ')}.`
 				: 'Sinais insuficientes para cruzar origem.',
 		regionHints: {
-			countryCodes: intersection.length > 0 ? [...intersection] : [],
+			countryCodes: workerBrLeak
+				? ['BR']
+				: intersection.length > 0
+					? [...intersection]
+					: [],
 		},
 		raw: {
 			ipCountries: [...new Set(ipCountries)],
@@ -240,10 +278,13 @@ export function runIpVsTzProbe(
 			storageGpsConflict,
 			dateStringLeak,
 			workerMismatch,
+			httpWorkerMismatch,
+			workerBrLeak,
 			iframeMismatch,
 			serviceWorkerMismatch,
 			acceptLanguageMismatch,
 			speechBrazilLeak,
+			rttNeutralized,
 			conflicted,
 		},
 	})

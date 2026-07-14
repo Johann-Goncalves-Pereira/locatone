@@ -9,6 +9,8 @@ const IP_SIGNAL_IDS = [
 	'ip_cloudflare',
 	'ip_ipwho',
 	'ip_geojs',
+	'ip_seeip',
+	'ip_geoiplookup',
 	'webrtc_stun',
 	'edge_geo',
 ] as const

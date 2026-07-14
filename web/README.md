@@ -68,16 +68,18 @@ Probes are grouped the same way as the forensics panel.
 
 #### Coordinates
 
-| Probe          | What it does                                                                                                                       |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `gps`          | High-accuracy Geolocation API (GNSS); may take two samples and keep the better accuracy; persists last OK fix for `storage_echo`   |
-| `network_geo`  | Coarse Geolocation (`enableHighAccuracy: false`) — browser Wi‑Fi / cell triangulation, labeled honestly (not a separate Wi‑Fi API) |
-| `ip_ipwho`     | ipwho.is geo lookup → lat/lng, city, ISP, timezone hints                                                                           |
-| `ip_geojs`     | geojs.io geo JSON → lat/lng + region hints                                                                                         |
-| `edge_geo`     | Same-origin `/api/edge-geo` (Vercel edge headers) — real TCP exit; unsupported in local Vite                                       |
-| `webrtc_stun`  | WebRTC ICE against configurable STUN; collects reflexive IPv4 + IPv6, then geo-looks up candidates                                 |
-| `rtt_probe`    | Multi-endpoint RTT to regional landmarks → soft lateration (weak confidence)                                                       |
-| `storage_echo` | Echo of the previous successful GPS fix stored in this session                                                                     |
+| Probe            | What it does                                                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `gps`            | High-accuracy Geolocation API (GNSS); may take two samples and keep the better accuracy; persists last OK fix for `storage_echo`   |
+| `network_geo`    | Coarse Geolocation (`enableHighAccuracy: false`) — browser Wi‑Fi / cell triangulation, labeled honestly (not a separate Wi‑Fi API) |
+| `ip_ipwho`       | ipwho.is geo lookup → lat/lng, city, ISP, timezone hints                                                                           |
+| `ip_geojs`       | geojs.io geo JSON → lat/lng + region hints                                                                                         |
+| `ip_seeip`       | seeip.org geoip (extra client vendor)                                                                                              |
+| `ip_geoiplookup` | geoiplookup.io JSON (extra client vendor)                                                                                          |
+| `edge_geo`       | Same-origin `/api/edge-geo` (Vercel edge headers; Vite dev stub with `no_edge_headers`)                                            |
+| `webrtc_stun`    | WebRTC ICE against configurable STUN; collects reflexive IPv4 + IPv6, then geo-looks up candidates                                 |
+| `rtt_probe`      | Multi-endpoint RTT → soft lateration; flat RTTs flagged as neutralized (no bogus coords)                                           |
+| `storage_echo`   | Echo of the previous successful GPS fix stored in this session                                                                     |
 
 #### Regional priors
 
@@ -88,6 +90,7 @@ Probes are grouped the same way as the forensics panel.
 | `locale`              | `navigator.languages` / resolved locale → language region priors      |
 | `date_string_tz`      | Parse `Date#toString()` / `toTimeString()` for engine TZ leaks        |
 | `worker_intl`         | Blob Worker Intl timezone + `navigator.language` (content-script gap) |
+| `http_worker_intl`    | Classic same-origin HTTP Worker Intl (bypasses blob-only rewrites)    |
 | `accept_language`     | Server echo of HTTP `Accept-Language` (survives VPN; not JS-visible)  |
 | `speech_voices`       | `speechSynthesis.getVoices()` locale priors (e.g. pt-BR on macOS)     |
 | `iframe_intl`         | Immediate `about:blank` iframe Intl / language (injection race)       |

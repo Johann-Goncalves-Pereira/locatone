@@ -1,7 +1,9 @@
 import {
 	fetchCloudflareTracePromise,
+	fetchGeoIpLookupPromise,
 	fetchGeoJsPromise,
 	fetchIpWhoPromise,
+	fetchSeeIpPromise,
 } from '@features/location/api/ip.api'
 import type { LocationSignal } from '@features/location/api/location.schema'
 import { makeSignal } from '@features/location/probes/signal-helpers'
@@ -184,6 +186,144 @@ export async function runIpGeoJsProbe(
 			confidence: 0,
 			summary:
 				error instanceof Error ? error.message : 'Falha ao consultar geojs.io',
+			raw: { error: String(error) },
+		})
+	}
+}
+
+export async function runIpSeeIpProbe(
+	signal?: AbortSignal,
+): Promise<LocationSignal> {
+	const label = 'IP (seeip.org)'
+	try {
+		const data = await fetchSeeIpPromise(signal)
+		const latitude = data.latitude
+		const longitude = data.longitude
+		const hasCoords =
+			latitude !== undefined &&
+			longitude !== undefined &&
+			Number.isFinite(latitude) &&
+			Number.isFinite(longitude)
+		const countryCode = data.country_code
+		const hasCountry = countryCode !== undefined && countryCode.length > 0
+
+		if (!hasCoords && !hasCountry && data.ip === undefined) {
+			return makeSignal({
+				id: 'ip_seeip',
+				label,
+				status: 'error',
+				confidence: 0,
+				summary: 'seeip.org retornou payload vazio.',
+				raw: { ...data },
+			})
+		}
+
+		return makeSignal({
+			id: 'ip_seeip',
+			label,
+			status: 'ok',
+			confidence: hasCoords ? 0.57 : hasCountry ? 0.47 : 0.25,
+			...(hasCoords
+				? {
+						lat: latitude,
+						lng: longitude,
+						accuracyMeters: 90_000,
+					}
+				: {}),
+			summary:
+				[data.city, data.region, data.country]
+					.filter(part => part !== undefined && part.length > 0)
+					.join(', ') ||
+				(data.ip !== undefined ? `IP seeip: ${data.ip}` : 'GeoIP seeip'),
+			regionHints: {
+				countryCodes: countryCode ? [countryCode] : [],
+				countries: data.country ? [data.country] : [],
+				cities: data.city ? [data.city] : [],
+				regions: data.region ? [data.region] : [],
+				...(data.timezone !== undefined ? { timezone: data.timezone } : {}),
+			},
+			raw: { ...data },
+		})
+	} catch (error) {
+		return makeSignal({
+			id: 'ip_seeip',
+			label,
+			status: 'error',
+			confidence: 0,
+			summary:
+				error instanceof Error ? error.message : 'Falha ao consultar seeip.org',
+			raw: { error: String(error) },
+		})
+	}
+}
+
+export async function runIpGeoIpLookupProbe(
+	signal?: AbortSignal,
+): Promise<LocationSignal> {
+	const label = 'IP (geoiplookup.io)'
+	try {
+		const data = await fetchGeoIpLookupPromise(signal)
+		const latitude = data.latitude
+		const longitude = data.longitude
+		const hasCoords =
+			latitude !== undefined &&
+			longitude !== undefined &&
+			Number.isFinite(latitude) &&
+			Number.isFinite(longitude)
+		const countryCode = data.country_code
+		const hasCountry = countryCode !== undefined && countryCode.length > 0
+
+		if (!hasCoords && !hasCountry && data.ip === undefined) {
+			return makeSignal({
+				id: 'ip_geoiplookup',
+				label,
+				status: 'error',
+				confidence: 0,
+				summary: 'geoiplookup.io retornou payload vazio.',
+				raw: { ...data },
+			})
+		}
+
+		return makeSignal({
+			id: 'ip_geoiplookup',
+			label,
+			status: 'ok',
+			confidence: hasCoords ? 0.56 : hasCountry ? 0.46 : 0.25,
+			...(hasCoords
+				? {
+						lat: latitude,
+						lng: longitude,
+						accuracyMeters: 95_000,
+					}
+				: {}),
+			summary:
+				[data.city, data.region, data.country_name]
+					.filter(part => part !== undefined && part.length > 0)
+					.join(', ') ||
+				(data.ip !== undefined
+					? `IP geoiplookup: ${data.ip}`
+					: 'GeoIP geoiplookup'),
+			regionHints: {
+				countryCodes: countryCode ? [countryCode] : [],
+				countries: data.country_name ? [data.country_name] : [],
+				cities: data.city ? [data.city] : [],
+				regions: data.region ? [data.region] : [],
+				...(data.timezone_name !== undefined
+					? { timezone: data.timezone_name }
+					: {}),
+			},
+			raw: { ...data },
+		})
+	} catch (error) {
+		return makeSignal({
+			id: 'ip_geoiplookup',
+			label,
+			status: 'error',
+			confidence: 0,
+			summary:
+				error instanceof Error
+					? error.message
+					: 'Falha ao consultar geoiplookup.io',
 			raw: { error: String(error) },
 		})
 	}

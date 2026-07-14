@@ -8,10 +8,14 @@ import { externalGetJson, externalGetText } from '@lib/external-fetch'
 import {
 	CloudflareTrace,
 	type CloudflareTrace as CloudflareTraceType,
+	GeoIpLookupResponse,
+	type GeoIpLookupResponse as GeoIpLookupResponseType,
 	GeoJsResponse,
 	type GeoJsResponse as GeoJsResponseType,
 	IpWhoResponse,
 	type IpWhoResponse as IpWhoResponseType,
+	SeeIpResponse,
+	type SeeIpResponse as SeeIpResponseType,
 } from '@features/location/api/location.schema'
 
 export function parseCloudflareTrace(text: string): CloudflareTraceType {
@@ -77,6 +81,24 @@ export const fetchGeoJs = (
 		signal === undefined ? {} : { signal },
 	)
 
+export const fetchSeeIp = (
+	signal?: AbortSignal,
+): Effect.Effect<SeeIpResponseType, ApiError | ParseError> =>
+	externalGetJson(
+		env.VITE_SEEIP_URL.href,
+		SeeIpResponse,
+		signal === undefined ? {} : { signal },
+	)
+
+export const fetchGeoIpLookup = (
+	signal?: AbortSignal,
+): Effect.Effect<GeoIpLookupResponseType, ApiError | ParseError> =>
+	externalGetJson(
+		env.VITE_GEOIPLOOKUP_URL.href,
+		GeoIpLookupResponse,
+		signal === undefined ? {} : { signal },
+	)
+
 export const fetchCloudflareTracePromise = (
 	signal?: AbortSignal,
 ): Promise<CloudflareTraceType> => runApiPromise(fetchCloudflareTrace(signal))
@@ -89,3 +111,11 @@ export const fetchIpWhoPromise = (
 export const fetchGeoJsPromise = (
 	signal?: AbortSignal,
 ): Promise<GeoJsResponseType> => runApiPromise(fetchGeoJs(signal))
+
+export const fetchSeeIpPromise = (
+	signal?: AbortSignal,
+): Promise<SeeIpResponseType> => runApiPromise(fetchSeeIp(signal))
+
+export const fetchGeoIpLookupPromise = (
+	signal?: AbortSignal,
+): Promise<GeoIpLookupResponseType> => runApiPromise(fetchGeoIpLookup(signal))
