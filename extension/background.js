@@ -450,9 +450,10 @@ function setupServiceWorkerRewrite() {
   if (browser.webRequest.onHeadersReceived.hasListener(onServiceWorkerHeaders)) {
     browser.webRequest.onHeadersReceived.removeListener(onServiceWorkerHeaders);
   }
+  // No `types: ["script"]` — Firefox often does not classify SW installs as script.
   browser.webRequest.onHeadersReceived.addListener(
     onServiceWorkerHeaders,
-    { urls: ["<all_urls>"], types: ["script"] },
+    { urls: ["<all_urls>"] },
     ["blocking", "responseHeaders"]
   );
 }

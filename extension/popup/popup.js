@@ -54,7 +54,6 @@ const REGION_CURRENCY = {
 const els = {
   input: $("input"),
   apply: $("apply"),
-  fixtureTallinn: $("fixtureTallinn"),
   enabled: $("enabled"),
   resolved: $("resolved"),
   lat: $("lat"),
@@ -76,8 +75,6 @@ const els = {
   edgeWarn: $("edgeWarn"),
   error: $("error"),
 };
-
-const TALLINN_FIXTURE = "59.457528, 24.697444";
 
 let proxyExpanded = false;
 
@@ -265,13 +262,6 @@ async function onProxyChange() {
 }
 
 els.apply.addEventListener("click", onApply);
-if (els.fixtureTallinn) {
-  els.fixtureTallinn.addEventListener("click", () => {
-    els.input.value = TALLINN_FIXTURE;
-    showError("");
-    onApply();
-  });
-}
 els.enabled.addEventListener("change", onToggle);
 els.proxyToggle.addEventListener("click", () => {
   setProxyExpanded(!proxyExpanded);

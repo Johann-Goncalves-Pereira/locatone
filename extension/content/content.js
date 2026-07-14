@@ -1032,13 +1032,100 @@
       const container = win.navigator && win.navigator.serviceWorker;
       if (!container || typeof container.register !== "function") return;
       const origRegister = container.register.bind(container);
-      container.register = exportFunction(function (scriptURL, options) {
+
+      function spoofedIntlReply() {
+        const locale = String(config.locale || "en-US");
+        const base = locale.split("-")[0] || "en";
         try {
-          if (config.enabled) {
-            const abs = new win.URL(String(scriptURL), win.location.href).href;
-            // Fire-and-forget mark for background filterResponseData rewrite.
+          const obj = new win.Object();
+          obj.timeZone = config.timezone || "UTC";
+          obj.language = locale;
+          const langs = new win.Array();
+          langs.push(locale);
+          langs.push(base);
+          obj.languages = langs;
+          return obj;
+        } catch {
+          return {
+            timeZone: config.timezone || "UTC",
+            language: locale,
+            languages: [locale, base],
+          };
+        }
+      }
+
+      function dispatchSpoofedWorkerMessage() {
+        try {
+          const reply = spoofedIntlReply();
+          const data =
+            typeof cloneInto === "function"
+              ? cloneInto(reply, win, { cloneFunctions: false })
+              : reply;
+          const evt = new win.MessageEvent("message", { data: data });
+          container.dispatchEvent(evt);
+        } catch (e) {
+          console.warn("Locatone SW message synthesize failed", e);
+        }
+      }
+
+      function wrapServiceWorker(sw) {
+        if (!sw || typeof sw.postMessage !== "function") return;
+        try {
+          if (sw.__locatonePmWrapped) return;
+          const origPm = sw.postMessage.bind(sw);
+          sw.postMessage = exportFunction(function (message, transfer) {
+            if (config.enabled) {
+              // Probe path: page listens on navigator.serviceWorker 'message'.
+              win.setTimeout(dispatchSpoofedWorkerMessage, 0);
+            }
             try {
-              browser.runtime.sendMessage({
+              if (transfer === undefined) return origPm(message);
+              return origPm(message, transfer);
+            } catch {
+              return undefined;
+            }
+          }, win);
+          try {
+            sw.__locatonePmWrapped = true;
+          } catch {
+            /* ignore */
+          }
+        } catch (e) {
+          console.warn("Locatone SW postMessage wrap failed", e);
+        }
+      }
+
+      function wrapRegistration(reg) {
+        if (!reg) return reg;
+        try {
+          wrapServiceWorker(reg.active);
+          wrapServiceWorker(reg.installing);
+          wrapServiceWorker(reg.waiting);
+          if (reg.installing) {
+            reg.installing.addEventListener("statechange", function () {
+              wrapServiceWorker(reg.active);
+              wrapServiceWorker(reg.installing);
+              wrapServiceWorker(reg.waiting);
+            });
+          }
+        } catch (e) {
+          console.warn("Locatone SW registration wrap failed", e);
+        }
+        return reg;
+      }
+
+      container.register = exportFunction(function (scriptURL, options) {
+        const run = async function () {
+          let abs = String(scriptURL);
+          try {
+            abs = new win.URL(String(scriptURL), win.location.href).href;
+          } catch {
+            /* keep relative */
+          }
+
+          if (config.enabled) {
+            try {
+              await browser.runtime.sendMessage({
                 type: "locatone:markSwScript",
                 url: abs,
               });
@@ -1046,12 +1133,20 @@
               /* ignore */
             }
           }
-        } catch {
-          /* ignore */
-        }
-        return options === undefined
-          ? origRegister(scriptURL)
-          : origRegister(scriptURL, options);
+
+          const opts = options ? Object.assign({}, options) : {};
+          if (config.enabled) {
+            opts.updateViaCache = "none";
+          }
+
+          const reg =
+            options === undefined && !config.enabled
+              ? await origRegister(scriptURL)
+              : await origRegister(scriptURL, opts);
+          return wrapRegistration(reg);
+        };
+
+        return win.Promise.resolve(run());
       }, win);
       originals.serviceWorkerPatched = true;
     } catch (e) {

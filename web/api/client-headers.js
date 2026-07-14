@@ -1,6 +1,6 @@
 /**
  * Echo browser request headers the page cannot read (Accept-Language).
- * Survives VPN exit spoofing — ProtonVPN does not rewrite Accept-Language.
+ * Survives VPN exit spoofing — VPNs typically do not rewrite Accept-Language.
  */
 
 module.exports = function handler(req, res) {

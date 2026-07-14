@@ -1,13 +1,13 @@
 # Locatone
 
-Firefox extension that spoofs where websites think you are — **without requiring
-a VPN** (ProtonVPN to the spoof city is the easy win for server-side geo). Paste
-decimal coordinates, DMS, or a Google Maps link; Locatone overrides the
-Geolocation API, timezone/locale, `Date#toString` / Worker + Service Worker Intl,
+Firefox extension that spoofs where websites think you are. Paste decimal
+coordinates, DMS, or a Google Maps link; Locatone overrides the Geolocation API,
+timezone/locale, `Date#toString` / Worker + Service Worker Intl,
 `Accept-Language`, speech voices, iframe Intl, Intl number/currency priors,
 regional font probes, WebRTC ICE, sensors / deviceorientation, and common
 client-side IP-geo APIs (including Cloudflare `/cdn-cgi/trace`). Optionally route
-traffic through your own HTTP/SOCKS5 proxy so the real public IP matches.
+traffic through your own HTTP/SOCKS5 proxy (or use a system VPN) so the real
+public exit IP matches the spoofed place.
 
 ## Install (Zen Browser)
 
@@ -53,29 +53,17 @@ profile’s `user.js` so Zen can load this local unsigned add-on.
 Temporary add-ons are removed when the browser restarts. For AMO/signing, pack via
 [web-ext](https://extensionworkshop.com/documentation/developing/getting-started-with-web-ext/).
 
-## Competition fixture
-
-| Role | Place | Decimal |
-| --- | --- | --- |
-| Truth | Mandirituba - PR | `-25.872917, -49.410583` |
-| Spoof | Tallinn, Estonia | `59.457528, 24.697444` |
-
-**Recommended play:** ProtonVPN → Tallinn + Locatone **Tallinn fixture** button.
-Then `edge_geo` / client IP APIs already say `EE`; the fight is Accept-Language,
-speech voices, iframe / Service Worker Intl, and other client leftovers.
-
 ## Usage
 
-1. Click the Locatone toolbar icon, then either paste coords / DMS / Maps URL **or**
-   click **Tallinn fixture**
-2. Click **Apply** (enables spoofing) — fixture button applies automatically
-3. Reload open tabs so content scripts pick up the new location
-4. Optional: set **Proxy** to HTTP or SOCKS5 with a matching exit if you are **not**
-   using ProtonVPN and need server-side `edge_geo` to match
+1. Click the Locatone toolbar icon
+2. Paste decimal coords, DMS, or a Google Maps link (example: `59.457528, 24.697444`)
+3. Click **Apply** (enables spoofing)
+4. Reload open tabs so content scripts pick up the new location
+5. Optional: set **Proxy** to HTTP or SOCKS5 with an exit near the spoofed coordinates
+   if you need server-side `edge_geo` to match (or use a system VPN to that region)
 
-When spoofing is on and proxy is Off, the popup explains that without a Tallinn
-exit IP (VPN or proxy), Vercel `edge_geo` still sees the real ISP — with ProtonVPN
-to Tallinn, keep proxy Off and focus on the client-side checklist below.
+When spoofing is on and proxy is Off, the popup warns that Vercel `edge_geo` still
+sees your real ISP exit unless a matching VPN/proxy is already in use.
 
 ## Coverage (vs `./web` forensics)
 
@@ -86,11 +74,11 @@ to Tallinn, keep proxy Off and focus on the client-side checklist below.
 | Timezone / locale | Overrides `Date#getTimezoneOffset`, `Intl.DateTimeFormat#resolvedOptions`, `navigator.language(s)` — offset matches IANA shortOffset (no `tz_offset_conflict`) |
 | `Date#toString` / `toTimeString` | Rebuilds GMT label + long zone name from spoofed IANA zone |
 | Worker Intl / language | Rewrites blob `Worker` / `SharedWorker` scripts with a TZ/locale prelude |
-| Service Worker Intl | Marks SW script URLs + `filterResponseData` prelude (covers `/locatone-sw-intl-probe.js`) |
+| Service Worker Intl | Marks SW script URLs + `filterResponseData` prelude; synthesizes spoofed Intl replies to page `postMessage` probes |
 | Iframe Intl | Hardens `appendChild` / `contentWindow` so `about:blank` races get spoofed Intl |
 | `Accept-Language` | Rewrites request header from spoofed locale via `webRequest.onBeforeSendHeaders` |
-| Speech voices | Filters `speechSynthesis.getVoices()` to spoof + English locales (hides `pt-BR`) |
-| Currency / numbering (`intl_currency`) | Spoofs `Intl.NumberFormat` default locale + `resolvedOptions`; country region drives EUR/… priors (e.g. Tallinn → `et-EE` → EUR / EE) |
+| Speech voices | Filters `speechSynthesis.getVoices()` to spoof + English locales |
+| Currency / numbering (`intl_currency`) | Spoofs `Intl.NumberFormat` default locale + `resolvedOptions` |
 | Regional fonts (`font_locale`) | Best-effort: `CanvasRenderingContext2D#measureText` hides script/emoji probes that conflict with the spoofed country (cannot invent missing OS fonts) |
 | Client-side IP lookup APIs | Rewrites responses (ipinfo, ip-api, ipapi.co, geojs, ipwho, …) with plausible country IPs (not TEST-NET) |
 | Cloudflare `/cdn-cgi/trace` | Rewrites plain-text `loc` / `ip` / `colo` to spoofed country |
@@ -102,45 +90,23 @@ to Tallinn, keep proxy Off and focus on the client-side checklist below.
 | Magnetometer / barometer / orientation sensors | Constructors stubbed → unsupported |
 | Legacy `deviceorientation` | `window.addEventListener` swallows orientation events |
 | Session GPS echo | Clears `sessionStorage` key `locatone:last-gps` on apply |
-| Server-side IP / Vercel `edge_geo` | **Not fakeable in-browser** — use ProtonVPN or the optional proxy with a Tallinn exit |
+| Server-side IP / Vercel `edge_geo` | **Not fakeable in-browser** — use a VPN or the optional proxy with an exit near the spoof |
 
 ## Proxy notes
 
 - Mode **Off** (default): client forensics only; your real ISP IP remains visible to
   servers that do their own geo (including Locatone’s `/api/edge-geo`) unless you
-  already exit in Tallinn via VPN.
+  already exit via a matching system VPN.
 - **HTTP** / **SOCKS5**: when spoofing is enabled, all browser requests use your proxy (`browser.proxy.onRequest`).
 - Provide a proxy exit near the spoofed coordinates if you need IP city and GPS city to agree on *server-side* checkers without a system VPN.
 - Auth fields are optional; connection failures show up as normal network errors in the tab.
 
 ## Test checklist (against `./web`)
 
-1. Connect **ProtonVPN → Tallinn**
-2. Click **Tallinn fixture** (or Apply `59.457528, 24.697444`) → popup status shows Tallinn / `Europe/Tallinn` / locale `et-EE` / currency EUR / country EE
-3. Start `./web` (`cd web && pnpm dev`), reload the tab after Apply
-4. Run **Revelar origem**:
-   - `gps` / `network_geo` pins near Tallinn (`network_geo` coarser accuracy)
-   - `ip_cloudflare.loc` → `EE`; ipwho / geojs city/coords spoofed; no TEST-NET in `ip_sanity`
-   - `edge_geo` → `EE` under ProtonVPN (production); unsupported locally
-   - `timezone` → `Europe/Tallinn` with EE prior
-   - `locale` → `et-EE` with EE prior
-   - `accept_language` → `et-EE,…` (not `pt-BR`); no mismatch vs navigator
-   - `speech_voices` → no `hasPtBr`; langs consistent with EE/en
-   - `date_string_tz` → Eastern European label / GMT aligned with Tallinn
-   - `worker_intl` / `iframe_intl` / `service_worker_intl` → match page (`Europe/Tallinn` / `et-EE`)
-   - `intl_currency` → EUR with EE in country hints
-   - `font_locale` → no strong conflicting CJK / Cyrillic / flag priors (JP, BR, …)
-   - `webrtc_stun` → no public IP / no real-country pin
-   - `orientation_leak` / `compass` → no live heading sample
-   - `storage_gps_conflict` → not conflicted (session echo cleared)
-   - `tz_offset_conflict` → `mismatch: false`
-   - `ip_vs_tz` → not conflicted; fusion **aligned** (client signals)
-   - Competition chip → **Consenso Tallinn**
-5. In the page console:
-   - `Intl.DateTimeFormat().resolvedOptions().timeZone` → `Europe/Tallinn`
-   - `navigator.language` → `et-EE`
-   - `new Date().toString()` → GMT+0x00 with Eastern European name
-6. (Optional) Disable speech/header counters temporarily → chip flips to **Vazamento BR detectado** while GPS/IP still say Tallinn
+1. Apply any spoofed coordinates (example: `59.457528, 24.697444`) → popup shows enriched timezone / locale / country
+2. Start `./web` (`cd web && pnpm dev`), reload the tab after Apply
+3. Run **Revelar origem** and confirm GPS / Intl / Accept-Language / Worker / Service Worker / speech / IP mocks align with the spoof; `edge_geo` matches only with a matching VPN/proxy exit
+4. In the page console, check `Intl.DateTimeFormat().resolvedOptions().timeZone` and `navigator.language` match the spoof
 
 ## Limitations
 

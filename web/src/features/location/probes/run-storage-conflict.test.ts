@@ -24,7 +24,7 @@ function okCoords(
 }
 
 describe('runStorageGpsConflictProbe', () => {
-	it('flags Mandirituba vs Tallinn session conflict', () => {
+	it('flags distant session vs live GPS as conflict', () => {
 		const gps = okCoords('gps', 59.457528, 24.697444)
 		const stored = okCoords('storage_echo', -25.872917, -49.410583)
 		const result = runStorageGpsConflictProbe(gps, stored)

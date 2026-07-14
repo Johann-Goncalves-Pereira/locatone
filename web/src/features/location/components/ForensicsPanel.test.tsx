@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { ProbeId } from '@features/location/api/location.schema'
 import { ForensicsPanel } from '@features/location/components/ForensicsPanel'
@@ -325,5 +325,63 @@ describe('ForensicsPanel', () => {
 			screen.getByRole('button', { name: /Priors regionais: expandir/i }),
 		)
 		expect(screen.getByText('Fuso horário (IANA)')).toBeInTheDocument()
+	})
+
+	it('copies the full scan JSON when Copiar resultados is clicked', async () => {
+		const user = userEvent.setup()
+		const writeText = vi.fn().mockResolvedValue(undefined)
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { writeText },
+		})
+
+		renderWithProviders(
+			<ForensicsPanel
+				open
+				isCollecting={false}
+				hasStarted
+				selectedSignalIds={[]}
+				onToggleSignal={() => undefined}
+				onToggle={() => undefined}
+				fused={{
+					agreement: 'aligned',
+					summary: 'Posição fundida de teste.',
+					confidence: 0.8,
+					sourceIds: ['gps'],
+					lat: -23.55,
+					lng: -46.63,
+					accuracyMeters: 30,
+				}}
+				signals={[
+					{
+						id: 'gps',
+						label: 'GPS / GNSS',
+						status: 'ok',
+						confidence: 0.9,
+						summary: 'Alta precisão',
+						raw: { accuracy: 12 },
+						collectedAt: '2026-01-01T00:00:00.000Z',
+						lat: -23.55,
+						lng: -46.63,
+						accuracyMeters: 12,
+					},
+				]}
+			/>,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: /^Copiar resultados$/i }),
+		)
+		expect(writeText).toHaveBeenCalledTimes(1)
+		const firstCall = writeText.mock.calls[0]
+		const payload: unknown = firstCall?.[0]
+		expect(typeof payload).toBe('string')
+		expect(JSON.parse(String(payload))).toMatchObject({
+			fused: { agreement: 'aligned' },
+			signals: [{ id: 'gps', status: 'ok' }],
+		})
+		expect(
+			screen.getByRole('button', { name: /^Copiado$/i }),
+		).toBeInTheDocument()
 	})
 })

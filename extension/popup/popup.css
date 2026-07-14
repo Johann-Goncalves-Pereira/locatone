@@ -201,31 +201,6 @@ select:focus {
   animation: flash 0.45s ease;
 }
 
-.fixture-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.btn.fixture {
-  background: transparent;
-  color: var(--loc-accent);
-  border: 1px solid var(--loc-accent-dim);
-  padding: 6px 12px;
-  font-size: 0.78rem;
-}
-
-.btn.fixture:hover {
-  border-color: var(--loc-accent);
-  background: color-mix(in oklab, var(--loc-accent) 10%, transparent);
-}
-
-.fixture-hint {
-  font-size: 0.7rem;
-  color: var(--loc-muted);
-  line-height: 1.3;
-}
-
 @keyframes flash {
   0% {
     box-shadow: 0 0 0 0 color-mix(in oklab, var(--loc-accent) 55%, transparent);

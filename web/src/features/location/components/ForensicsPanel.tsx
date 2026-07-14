@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { useAtomSet, useAtomValue } from '@effect-atom/atom-react'
 
 import type {
@@ -7,7 +9,7 @@ import type {
 } from '@features/location/api/location.schema'
 import { sectionOpenAtom } from '@features/location/atoms/location-ui.atom'
 import { SignalCard } from '@features/location/components/SignalCard'
-import { competitionVerdict } from '@features/location/lib/competition-verdict'
+import { buildScanExportPayload } from '@features/location/lib/build-scan-export'
 import { FUSED_COLOR } from '@features/location/lib/probe-colors'
 import { formatAccuracyMeters } from '@features/location/lib/signal-map-points'
 import {
@@ -64,16 +66,20 @@ export function ForensicsPanel({
 }: ForensicsPanelProps) {
 	const openGroups = useAtomValue(sectionOpenAtom)
 	const setOpenGroups = useAtomSet(sectionOpenAtom)
+	const [copiedAll, setCopiedAll] = useState(false)
 	const displaySignals =
 		isCollecting && signals.length === 0
 			? collectingPlaceholderSignals()
 			: signals
 	const grouped = groupSignalsBySection(displaySignals)
-	const verdict =
-		!isCollecting && signals.length > 0
-			? competitionVerdict(signals)
-			: undefined
 	const panelBodyId = 'locatone-forensics-body'
+	const canCopyResults = (() => {
+		if (isCollecting || signals.length === 0) {
+			return false
+		}
+		const first = signals[0]
+		return first !== undefined && !isPlaceholderSignal(first)
+	})()
 	const ctaLabel = revealCtaLabel({
 		isCollecting: false,
 		isError: false,
@@ -86,6 +92,19 @@ export function ForensicsPanel({
 			: fused
 				? fused.summary
 				: 'Cada método, com confiança e evidência bruta.'
+
+	async function copyAllResults() {
+		try {
+			const text = buildScanExportPayload({ signals, fused })
+			await navigator.clipboard.writeText(text)
+			setCopiedAll(true)
+			window.setTimeout(() => {
+				setCopiedAll(false)
+			}, 1600)
+		} catch {
+			setCopiedAll(false)
+		}
+	}
 
 	function toggleGroup(key: PanelGroupKey) {
 		if (openGroups.includes(key)) {
@@ -163,35 +182,17 @@ export function ForensicsPanel({
 					</div>
 				) : null}
 
-				{verdict !== undefined ? (
-					<div
-						className={`mb-4 rounded-xl border px-3 py-3 ${
-							verdict.kind === 'brazil_leak'
-								? 'border-[color-mix(in_oklab,var(--loc-danger)_40%,transparent)] bg-[var(--loc-panel)]'
-								: verdict.kind === 'aligned_spoof'
-									? 'border-[color-mix(in_oklab,var(--loc-ok)_40%,transparent)] bg-[var(--loc-panel)]'
-									: 'border-[var(--loc-border)] bg-[var(--loc-panel)]'
-						}`}
-					>
-						<div className='flex flex-wrap items-center gap-2'>
-							<span
-								className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase ${
-									verdict.kind === 'brazil_leak'
-										? 'border-[color-mix(in_oklab,var(--loc-danger)_40%,transparent)] bg-[color-mix(in_oklab,var(--loc-danger)_12%,transparent)] text-[var(--loc-danger)]'
-										: verdict.kind === 'aligned_spoof'
-											? 'border-[color-mix(in_oklab,var(--loc-ok)_40%,transparent)] bg-[color-mix(in_oklab,var(--loc-ok)_12%,transparent)] text-[var(--loc-ok)]'
-											: 'border-[var(--loc-border)] text-[var(--loc-muted)]'
-								}`}
-							>
-								{verdict.label}
-							</span>
-							<span className='text-[10px] tracking-wider text-[var(--loc-muted)] uppercase'>
-								Mandirituba × Tallinn
-							</span>
-						</div>
-						<p className='mt-2 text-sm text-[var(--loc-ink)]'>
-							{verdict.detail}
-						</p>
+				{canCopyResults ? (
+					<div className='mb-4 flex justify-end'>
+						<button
+							type='button'
+							onClick={() => {
+								void copyAllResults()
+							}}
+							className='rounded-md border border-[var(--loc-border)] px-2.5 py-1 text-[11px] text-[var(--loc-ink)] hover:border-[var(--loc-accent-dim)] focus-visible:ring-2 focus-visible:ring-[var(--loc-accent)] focus-visible:outline-none'
+						>
+							{copiedAll ? 'Copiado' : 'Copiar resultados'}
+						</button>
 					</div>
 				) : null}
 

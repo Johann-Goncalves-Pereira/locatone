@@ -6,7 +6,7 @@ const CONFLICT_KM = 150
 
 /**
  * Session GPS that disagrees strongly with the live GPS fix — often a
- * pre-spoof Mandirituba pin still in `sessionStorage`.
+ * pre-spoof pin still in `sessionStorage`.
  */
 export function runStorageGpsConflictProbe(
 	gps: LocationSignal | undefined,

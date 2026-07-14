@@ -29,20 +29,7 @@ Copy `.env.example` to `.env` to override STUN / IP lookup bases. Only use the
 `VITE_` prefix for values safe to expose in the browser. Client probes use
 public APIs (Cloudflare trace, ipwho.is, geojs.io, public STUN). On a Vercel
 deploy, `edge_geo` reads the visitor’s real TCP exit via edge headers — the
-Firefox extension cannot forge that without a matching proxy.
-
-### Competition fixture
-
-| Role         | Place            | Decimal                  |
-| ------------ | ---------------- | ------------------------ |
-| Truth        | Mandirituba - PR | `-25.872917, -49.410583` |
-| Spoof target | Tallinn, Estonia | `59.457528, 24.697444`   |
-
-With **ProtonVPN → Tallinn**, IP / Cloudflare / Vercel `edge_geo` all say `EE`.
-The site’s remaining aces are client leftovers the extension must close:
-`accept_language`, `speech_voices`, `iframe_intl`, `service_worker_intl`, plus
-Date/Worker leaks. The forensics panel shows a **Mandirituba × Tallinn** verdict
-chip (`Consenso Tallinn` vs `Vazamento BR detectado`).
+Firefox extension cannot forge that without a matching proxy or VPN exit.
 
 ## Map & geolocation features
 
@@ -144,7 +131,7 @@ and `raw` evidence for the panel.
 - Per-signal cards with status badge, confidence, accuracy, and expandable raw
 - Selecting cards syncs highlight + camera focus on the map
 - Panel open/closed persists in the URL via `?panel=`
-- Competition verdict chip (Mandirituba × Tallinn) after a completed scan
+- **Copiar resultados** exports the full scan (signals + fusion) as JSON
 
 ## Scripts
 
