@@ -306,7 +306,7 @@ const LocatoneIpMock = (() => {
       "transfer-encoding",
     ]);
     const headers = (responseHeaders || []).filter(
-      (h) => !drop.has(h.name.toLowerCase())
+      (h) => !drop.has(h.name.toLowerCase()),
     );
     headers.push({ name: "Content-Type", value: contentTypeFor(kind) });
     return headers;

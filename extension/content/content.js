@@ -389,28 +389,34 @@
     }
 
     const softMap = exportFunction(function () {
-      // Ambiguous QWERTY sample → web keyboard prior stays soft / weak.
+      // Soft QWERTY prior — build Map in page world to avoid Xray denial.
       try {
         const map = new win.Map();
-        map.set("KeyA", "a");
-        map.set("KeyQ", "q");
-        map.set("KeyW", "w");
-        map.set("KeyZ", "z");
-        map.set("Digit1", "1");
-        map.set("Minus", "-");
-        map.set("Equal", "=");
-        map.set("BracketLeft", "[");
-        map.set("BracketRight", "]");
-        map.set("Semicolon", ";");
-        map.set("Quote", "'");
-        map.set("Backslash", "\\");
-        map.set("Comma", ",");
-        map.set("Period", ".");
-        map.set("Slash", "/");
+        const pairs = [
+          ["KeyA", "a"],
+          ["KeyQ", "q"],
+          ["KeyW", "w"],
+          ["KeyZ", "z"],
+          ["Digit1", "1"],
+          ["Minus", "-"],
+          ["Equal", "="],
+          ["BracketLeft", "["],
+          ["BracketRight", "]"],
+          ["Semicolon", ";"],
+          ["Quote", "'"],
+          ["Backslash", "\\"],
+          ["Comma", ","],
+          ["Period", "."],
+          ["Slash", "/"],
+        ];
+        for (let i = 0; i < pairs.length; i++) {
+          map.set(pairs[i][0], pairs[i][1]);
+        }
         return win.Promise.resolve(map);
       } catch (e) {
-        // Never hang the page probe — fail fast instead.
-        return win.Promise.reject(e);
+        return win.Promise.reject(
+          e || new win.Error("Locatone keyboard map unavailable")
+        );
       }
     }, win);
 
@@ -428,7 +434,6 @@
         originals.keyboardPatched = true;
       } catch (err) {
         console.warn("Locatone keyboard override failed", err || e);
-        // Last resort: leave native API alone but it may hang; we tried.
       }
     }
   }
@@ -484,65 +489,84 @@
     }
 
     function successPayload(options) {
-      const coords = {
-        latitude: config.lat,
-        longitude: config.lng,
-        accuracy: accuracyForOptions(options),
-        altitude: null,
-        altitudeAccuracy: null,
-        heading: null,
-        speed: null,
-      };
-      const pos = {
-        coords: coords,
-        timestamp: Date.now(),
-      };
-      if (typeof cloneInto === "function") {
-        return cloneInto(pos, win, { cloneFunctions: false });
+      const accuracy = accuracyForOptions(options);
+      // Build in the page compartment so GeolocationPosition consumers can read fields.
+      try {
+        const coordsObj = new win.Object();
+        coordsObj.latitude = config.lat;
+        coordsObj.longitude = config.lng;
+        coordsObj.accuracy = accuracy;
+        coordsObj.altitude = null;
+        coordsObj.altitudeAccuracy = null;
+        coordsObj.heading = null;
+        coordsObj.speed = null;
+        const posObj = new win.Object();
+        posObj.coords = coordsObj;
+        posObj.timestamp = Date.now();
+        return posObj;
+      } catch {
+        const plain = {
+          coords: {
+            latitude: config.lat,
+            longitude: config.lng,
+            accuracy: accuracy,
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
+          timestamp: Date.now(),
+        };
+        if (typeof cloneInto === "function") {
+          return cloneInto(plain, win, { cloneFunctions: false });
+        }
+        return plain;
       }
-      const coordsObj = new win.Object();
-      coordsObj.latitude = coords.latitude;
-      coordsObj.longitude = coords.longitude;
-      coordsObj.accuracy = coords.accuracy;
-      coordsObj.altitude = null;
-      coordsObj.altitudeAccuracy = null;
-      coordsObj.heading = null;
-      coordsObj.speed = null;
-      const posObj = new win.Object();
-      posObj.coords = coordsObj;
-      posObj.timestamp = Date.now();
-      return posObj;
     }
 
+    function makePositionError(message) {
+      try {
+        const err = new win.Object();
+        err.code = 2;
+        err.message = message || "Position unavailable";
+        err.PERMISSION_DENIED = 1;
+        err.POSITION_UNAVAILABLE = 2;
+        err.TIMEOUT = 3;
+        return err;
+      } catch {
+        return { code: 2, message: message || "Position unavailable" };
+      }
+    }
+
+    // Content-script timers — page win.setTimeout will not reliably invoke
+    // privileged callbacks (causes eternal GPS hang / "Permission denied").
+    const watchIds = new Map();
+
     const getCurrentPosition = function (success, error, options) {
-      // Always complete — do not rely on native timeout when we own the method.
-      const finishOk = () => {
+      setTimeout(() => {
+        let delivered = false;
         try {
           if (typeof success === "function") {
             success(successPayload(options));
+            delivered = true;
           }
         } catch (err) {
-          if (typeof error === "function") {
-            try {
-              error(err);
-            } catch {
-              /* ignore secondary throw */
-            }
+          console.warn("Locatone geolocation success failed", err);
+        }
+        if (!delivered && typeof error === "function") {
+          try {
+            error(makePositionError("Locatone could not deliver position"));
+          } catch (err2) {
+            console.warn("Locatone geolocation error failed", err2);
           }
         }
-      };
-      try {
-        win.setTimeout(finishOk, 1);
-      } catch {
-        finishOk();
-      }
+      }, 1);
     };
 
-    const watchIds = new win.Map();
     const watchPosition = function (success, error, options) {
       getCurrentPosition(success, error, options);
       const id = Math.floor(Math.random() * 1e9) + 1;
-      const timer = win.setInterval(() => {
+      const timer = setInterval(() => {
         getCurrentPosition(success, error, options);
       }, 5000);
       watchIds.set(id, timer);
@@ -552,7 +576,7 @@
     const clearWatch = function (id) {
       const timer = watchIds.get(id);
       if (timer != null) {
-        win.clearInterval(timer);
+        clearInterval(timer);
         watchIds.delete(id);
       }
     };

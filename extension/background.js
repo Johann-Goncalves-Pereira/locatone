@@ -65,7 +65,9 @@ async function applyProxy() {
     }
 
     if (proxyActive()) {
-      browser.proxy.onRequest.addListener(proxyHandler, { urls: ["<all_urls>"] });
+      browser.proxy.onRequest.addListener(proxyHandler, {
+        urls: ["<all_urls>"],
+      });
     }
   } catch (err) {
     console.warn("Locatone proxy setup failed:", err);
@@ -130,13 +132,17 @@ async function resolveMapsUrl(url) {
       if (d) return { lat: parseFloat(d[1]), lng: parseFloat(d[2]) };
       const at = html.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
       if (at) return { lat: parseFloat(at[1]), lng: parseFloat(at[2]) };
-      const ll = html.match(/[?&](?:q|ll|destination)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
+      const ll = html.match(
+        /[?&](?:q|ll|destination)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/i,
+      );
       if (ll) return { lat: parseFloat(ll[1]), lng: parseFloat(ll[2]) };
       const mapsHref = html.match(
-        /https:\/\/(?:www\.)?google\.[^/"'\s]+\/maps[^"'\s]*/i
+        /https:\/\/(?:www\.)?google\.[^/"'\s]+\/maps[^"'\s]*/i,
       );
       if (mapsHref) {
-        const fromHref = LocatoneParse.parseMapsUrl(mapsHref[0].replace(/&amp;/g, "&"));
+        const fromHref = LocatoneParse.parseMapsUrl(
+          mapsHref[0].replace(/&amp;/g, "&"),
+        );
         if (fromHref) return fromHref;
       }
     }
@@ -155,7 +161,9 @@ async function resolveMapsUrl(url) {
         credentials: "omit",
       });
     } catch (err) {
-      throw new Error("Network error resolving Maps link: " + (err.message || err));
+      throw new Error(
+        "Network error resolving Maps link: " + (err.message || err),
+      );
     }
 
     if (resp.status >= 300 && resp.status < 400) {
@@ -174,7 +182,9 @@ async function resolveMapsUrl(url) {
         credentials: "omit",
       });
     } catch (err) {
-      throw new Error("Network error resolving Maps link: " + (err.message || err));
+      throw new Error(
+        "Network error resolving Maps link: " + (err.message || err),
+      );
     }
 
     current = followed.url || current;
@@ -249,19 +259,24 @@ function onIpHeaders(details) {
   return {
     responseHeaders: LocatoneIpMock.sanitizeResponseHeaders(
       details.responseHeaders,
-      match.kind
+      match.kind,
     ),
   };
 }
 
 /**
- * Neutralize RTT landmarks without hard-cancel.
- * Cancel + no-cors HEAD can stall forever in Firefox and freeze runAllProbes.
- * Redirect to data: so CORS fails fast → undefined RTT, scan continues.
+ * Neutralize RTT landmarks without hard-cancel or data: CORS traps.
+ * Redirect to an extension-packaged empty file so fetch settles quickly
+ * without measuring real geo latency (may still CORS-fail → undefined RTT).
  */
 function onRttLandmark(details) {
   if (!state.enabled || state.lat == null) return {};
-  return { redirectUrl: "data:text/plain," };
+  try {
+    return { redirectUrl: browser.runtime.getURL("lib/empty.txt") };
+  } catch (e) {
+    console.warn("Locatone RTT redirect failed", e);
+    return {};
+  }
 }
 
 function setupIpRewrite() {
@@ -269,11 +284,10 @@ function setupIpRewrite() {
   if (browser.webRequest.onHeadersReceived.hasListener(onIpHeaders)) {
     browser.webRequest.onHeadersReceived.removeListener(onIpHeaders);
   }
-  browser.webRequest.onHeadersReceived.addListener(
-    onIpHeaders,
-    { urls },
-    ["blocking", "responseHeaders"]
-  );
+  browser.webRequest.onHeadersReceived.addListener(onIpHeaders, { urls }, [
+    "blocking",
+    "responseHeaders",
+  ]);
 }
 
 function setupRttNeutralize() {
@@ -281,11 +295,9 @@ function setupRttNeutralize() {
   if (browser.webRequest.onBeforeRequest.hasListener(onRttLandmark)) {
     browser.webRequest.onBeforeRequest.removeListener(onRttLandmark);
   }
-  browser.webRequest.onBeforeRequest.addListener(
-    onRttLandmark,
-    { urls },
-    ["blocking"]
-  );
+  browser.webRequest.onBeforeRequest.addListener(onRttLandmark, { urls }, [
+    "blocking",
+  ]);
 }
 
 browser.runtime.onMessage.addListener((msg) => {
@@ -306,7 +318,10 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg.type === "locatone:setEnabled") {
-    return saveState({ enabled: !!msg.enabled }).then((s) => ({ ok: true, state: s }));
+    return saveState({ enabled: !!msg.enabled }).then((s) => ({
+      ok: true,
+      state: s,
+    }));
   }
 
   if (msg.type === "locatone:applyLocation") {
@@ -347,7 +362,8 @@ browser.storage.onChanged.addListener((changes, area) => {
       ...changes.locatone.newValue,
       proxy: {
         ...DEFAULT_STATE.proxy,
-        ...((changes.locatone.newValue && changes.locatone.newValue.proxy) || {}),
+        ...((changes.locatone.newValue && changes.locatone.newValue.proxy) ||
+          {}),
       },
     };
     applyProxy();
