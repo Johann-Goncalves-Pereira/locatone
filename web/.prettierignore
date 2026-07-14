@@ -3,3 +3,4 @@ dist
 coverage
 .pnpm-store
 node_modules
+.vercel
