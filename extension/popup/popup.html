@@ -74,64 +74,79 @@
         </div>
       </div>
 
-      <section class="proxy">
-        <h2 class="font-display">
-          Proxy <span class="hint">(optional — for real IP)</span>
-        </h2>
-        <label class="field">
-          <span class="label">Mode</span>
-          <select id="proxyMode">
-            <option value="none">Off</option>
-            <option value="http">HTTP</option>
-            <option value="socks5">SOCKS5</option>
-          </select>
-        </label>
-        <div id="proxyDetails" class="proxy-details" hidden>
-          <div class="row">
-            <label class="field grow">
-              <span class="label">Host</span>
-              <input
-                id="proxyHost"
-                type="text"
-                placeholder="127.0.0.1"
-                autocomplete="off"
-              />
-            </label>
-            <label class="field port">
-              <span class="label">Port</span>
-              <input
-                id="proxyPort"
-                type="text"
-                placeholder="1080"
-                autocomplete="off"
-              />
-            </label>
-          </div>
-          <div class="row">
-            <label class="field grow">
-              <span class="label">Username</span>
-              <input
-                id="proxyUser"
-                type="text"
-                placeholder="optional"
-                autocomplete="off"
-              />
-            </label>
-            <label class="field grow">
-              <span class="label">Password</span>
-              <input
-                id="proxyPass"
-                type="password"
-                placeholder="optional"
-                autocomplete="off"
-              />
-            </label>
+      <section class="proxy" id="proxySection">
+        <button
+          type="button"
+          id="proxyToggle"
+          class="proxy-toggle"
+          aria-expanded="false"
+          aria-controls="proxyBody"
+        >
+          <span class="proxy-toggle-label font-display">
+            Proxy
+            <span class="hint">(optional — for real IP)</span>
+          </span>
+          <span id="proxyBadge" class="proxy-badge">Off</span>
+          <span class="proxy-chevron" aria-hidden="true"></span>
+        </button>
+        <div id="proxyBody" class="proxy-body" hidden>
+          <label class="field">
+            <span class="label">Mode</span>
+            <select id="proxyMode">
+              <option value="none">Off</option>
+              <option value="http">HTTP</option>
+              <option value="socks5">SOCKS5</option>
+            </select>
+          </label>
+          <div id="proxyDetails" class="proxy-details" hidden>
+            <div class="row">
+              <label class="field grow">
+                <span class="label">Host</span>
+                <input
+                  id="proxyHost"
+                  type="text"
+                  placeholder="127.0.0.1"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="field port">
+                <span class="label">Port</span>
+                <input
+                  id="proxyPort"
+                  type="text"
+                  placeholder="1080"
+                  autocomplete="off"
+                />
+              </label>
+            </div>
+            <div class="row">
+              <label class="field grow">
+                <span class="label">Username</span>
+                <input
+                  id="proxyUser"
+                  type="text"
+                  placeholder="optional"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="field grow">
+                <span class="label">Password</span>
+                <input
+                  id="proxyPass"
+                  type="password"
+                  placeholder="optional"
+                  autocomplete="off"
+                />
+              </label>
+            </div>
           </div>
         </div>
       </section>
 
-      <p id="status" class="status" role="status">Spoofing off</p>
-      <p id="error" class="error" hidden></p>
+      <footer class="footer">
+        <p id="status" class="status" role="status">Spoofing off</p>
+        <p id="error" class="error" hidden></p>
+      </footer>
     </div>
 
     <script src="../lib/parse-location.js"></script>

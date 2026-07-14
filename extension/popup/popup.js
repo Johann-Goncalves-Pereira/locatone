@@ -62,6 +62,9 @@ const els = {
   locale: $("locale"),
   currency: $("currency"),
   country: $("country"),
+  proxyToggle: $("proxyToggle"),
+  proxyBody: $("proxyBody"),
+  proxyBadge: $("proxyBadge"),
   proxyMode: $("proxyMode"),
   proxyDetails: $("proxyDetails"),
   proxyHost: $("proxyHost"),
@@ -71,6 +74,8 @@ const els = {
   status: $("status"),
   error: $("error"),
 };
+
+let proxyExpanded = false;
 
 function showError(msg) {
   if (!msg) {
@@ -92,18 +97,37 @@ function proxyFromForm() {
   };
 }
 
-function syncProxyDetailsVisibility() {
-  const on = els.proxyMode.value !== "none";
+function proxyModeLabel(mode) {
+  if (mode === "http") return "HTTP";
+  if (mode === "socks5") return "SOCKS5";
+  return "Off";
+}
+
+function syncProxyUi() {
+  const mode = els.proxyMode.value || "none";
+  const on = mode !== "none";
   els.proxyDetails.hidden = !on;
+  els.proxyBadge.textContent = proxyModeLabel(mode);
+  els.proxyBadge.classList.toggle("on", on);
+  els.proxyBody.hidden = !proxyExpanded;
+  els.proxyToggle.setAttribute("aria-expanded", proxyExpanded ? "true" : "false");
+}
+
+function setProxyExpanded(expanded) {
+  proxyExpanded = !!expanded;
+  syncProxyUi();
 }
 
 function fillProxy(proxy = {}) {
-  els.proxyMode.value = proxy.mode || "none";
+  const mode = proxy.mode || "none";
+  els.proxyMode.value = mode;
   els.proxyHost.value = proxy.host || "";
   els.proxyPort.value = proxy.port || "";
   els.proxyUser.value = proxy.username || "";
   els.proxyPass.value = proxy.password || "";
-  syncProxyDetailsVisibility();
+  // Expand when a real proxy is configured; keep collapsed when Off.
+  proxyExpanded = mode !== "none";
+  syncProxyUi();
 }
 
 function countryFromLocale(locale) {
@@ -216,8 +240,11 @@ async function onToggle() {
 }
 
 async function onProxyChange() {
-  syncProxyDetailsVisibility();
   const proxy = proxyFromForm();
+  if (proxy.mode !== "none") {
+    proxyExpanded = true;
+  }
+  syncProxyUi();
   if (proxy.mode !== "none" && (!proxy.host || !proxy.port)) {
     return;
   }
@@ -230,6 +257,9 @@ async function onProxyChange() {
 
 els.apply.addEventListener("click", onApply);
 els.enabled.addEventListener("change", onToggle);
+els.proxyToggle.addEventListener("click", () => {
+  setProxyExpanded(!proxyExpanded);
+});
 els.proxyMode.addEventListener("change", onProxyChange);
 ["proxyHost", "proxyPort", "proxyUser", "proxyPass"].forEach((id) => {
   $(id).addEventListener("change", onProxyChange);

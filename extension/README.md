@@ -11,8 +11,13 @@ Sideload permanently into your Zen profile (unsigned local add-on):
 ```
 
 That builds an unpacked copy, points the profile at it, and **restarts Zen** if it is
-running (required — replacing an open `.xpi` leaves a stale JAR and the popup
-shows “File not found”).
+running (required — replacing an open `.xpi` leaves a stale JAR and the toolbar
+popup shows “File not found”).
+
+The Locatone toolbar icon opens the **native browser_action popup** (anchored under
+the icon, like other extensions). If you see “File not found” instead, re-run
+`./extension/sync-zen.sh` so Zen restarts with a fresh unpacked install — do not
+work around it by opening a separate window.
 
 After you change code:
 
@@ -36,14 +41,14 @@ profile’s `user.js` so Zen can load this local unsigned add-on.
 1. Open the browser → `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on…**
 3. Select [`manifest.json`](manifest.json) in this folder
-4. Click the Locatone toolbar icon
+4. Click the Locatone toolbar icon — the UI opens as a **toolbar popup**, not a separate window
 
 Temporary add-ons are removed when the browser restarts. For AMO/signing, pack via
 [web-ext](https://extensionworkshop.com/documentation/develop/getting-started-with-web-ext/).
 
 ## Usage
 
-1. Paste one of:
+1. Click the Locatone toolbar icon to open the popup, then paste one of:
    - `59.456619, 24.697315`
    - `59°27'23.8"N 24°41'50.2"E`
    - `https://maps.app.goo.gl/nqMeL4mzgyiVegbk9`

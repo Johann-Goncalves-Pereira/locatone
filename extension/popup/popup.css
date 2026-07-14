@@ -31,7 +31,8 @@ body {
 
 body {
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .atmosphere {
@@ -66,7 +67,7 @@ body {
 .shell {
   position: relative;
   z-index: 1;
-  padding: 16px 16px 14px;
+  padding: 16px 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -293,18 +294,45 @@ select:focus {
 
 .proxy {
   border-top: 1px solid var(--loc-border);
-  padding-top: 10px;
+  padding-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.proxy h2 {
+.proxy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
   margin: 0;
+  padding: 6px 2px;
+  border: none;
+  background: transparent;
+  color: var(--loc-ink);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.proxy-toggle:hover .proxy-toggle-label {
+  color: var(--loc-accent);
+}
+
+.proxy-toggle:focus-visible {
+  outline: 2px solid var(--loc-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.proxy-toggle-label {
+  flex: 1;
+  min-width: 0;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--loc-ink);
+  transition: color 0.15s ease;
 }
 
 .proxy .hint {
@@ -315,18 +343,75 @@ select:focus {
   color: var(--loc-muted);
 }
 
+.proxy-badge {
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid var(--loc-border);
+  background: color-mix(in oklab, var(--loc-bg) 70%, transparent);
+  color: var(--loc-muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+}
+
+.proxy-badge.on {
+  border-color: color-mix(in oklab, var(--loc-ok) 40%, transparent);
+  background: color-mix(in oklab, var(--loc-ok) 12%, transparent);
+  color: var(--loc-accent);
+}
+
+.proxy-chevron {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--loc-muted);
+  border-bottom: 1.5px solid var(--loc-muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  margin-bottom: 3px;
+}
+
+.proxy-toggle[aria-expanded="true"] .proxy-chevron {
+  transform: rotate(225deg);
+  margin-bottom: 0;
+  margin-top: 3px;
+}
+
+.proxy-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 2px;
+  animation: rise 0.25s ease;
+}
+
+.proxy-body[hidden],
+.proxy-details[hidden] {
+  display: none !important;
+}
+
 .proxy-details {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  animation: rise 0.25s ease;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .status {
   margin: 0;
   font-size: 0.74rem;
+  line-height: 1.45;
   color: var(--loc-muted);
-  min-height: 1.2em;
+  overflow-wrap: anywhere;
 }
 
 .status.on {
@@ -336,13 +421,16 @@ select:focus {
 .error {
   margin: 0;
   font-size: 0.74rem;
+  line-height: 1.45;
   color: var(--loc-danger);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .resolved,
-  .proxy-details,
-  .btn.primary.flash {
+  .proxy-body,
+  .btn.primary.flash,
+  .proxy-chevron {
     animation: none;
+    transition: none;
   }
 }
