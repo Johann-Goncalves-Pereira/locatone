@@ -3,13 +3,16 @@
 :root {
 	--loc-bg: #0b1215;
 	--loc-ink: #e8f2ef;
-	--loc-muted: #8aa39a;
+	--loc-muted: #9bb3aa;
 	--loc-accent: #3ee0c0;
 	--loc-accent-strong: #62f0d2;
 	--loc-accent-dim: color-mix(in oklab, var(--loc-accent) 45%, transparent);
 	--loc-border: color-mix(in oklab, var(--loc-ink) 14%, transparent);
 	--loc-panel: color-mix(in oklab, #102018 82%, black);
 	--loc-panel-strong: color-mix(in oklab, #163028 88%, black);
+	--loc-danger: #fb7185;
+	--loc-warning: #fbbf24;
+	--loc-ok: #3ee0c0;
 	--font-display: 'Syne', sans-serif;
 	--font-body: 'IBM Plex Sans', sans-serif;
 }
@@ -27,29 +30,33 @@ body {
 	font-family: var(--font-body);
 }
 
+.font-display {
+	font-family: var(--font-display);
+}
+
 .locatone-atmosphere {
-	opacity: 0.6;
+	opacity: 0.45;
 	mix-blend-mode: soft-light;
 	background:
 		radial-gradient(
 			1200px 600px at 15% -10%,
-			color-mix(in oklab, var(--loc-accent) 20%, transparent),
+			color-mix(in oklab, var(--loc-accent) 18%, transparent),
 			transparent 60%
 		),
 		radial-gradient(
 			900px 500px at 90% 20%,
-			color-mix(in oklab, #1b6b5a 38%, transparent),
+			color-mix(in oklab, #1b6b5a 32%, transparent),
 			transparent 55%
 		),
 		radial-gradient(
 			700px 420px at 50% 110%,
-			color-mix(in oklab, var(--loc-accent) 10%, transparent),
+			color-mix(in oklab, var(--loc-accent) 8%, transparent),
 			transparent 55%
 		),
 		repeating-linear-gradient(
 			-12deg,
 			transparent 0 12px,
-			color-mix(in oklab, var(--loc-ink) 3%, transparent) 12px 13px
+			color-mix(in oklab, var(--loc-ink) 2%, transparent) 12px 13px
 		);
 }
 
@@ -72,6 +79,11 @@ body {
 
 .locatone-pin--probe {
 	opacity: 0.9;
+}
+
+.locatone-pin--approx {
+	opacity: 0.65;
+	box-shadow: 0 0 0 1px color-mix(in oklab, var(--loc-bg) 70%, black);
 }
 
 .locatone-pin--selected {
@@ -164,4 +176,15 @@ body {
 
 .leaflet-bottom.leaflet-right {
 	display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.locatone-pin--fused,
+	.locatone-scan-line,
+	.locatone-fuse-card,
+	.locatone-placeholder,
+	.locatone-panel-shell {
+		animation: none !important;
+		transition: none !important;
+	}
 }

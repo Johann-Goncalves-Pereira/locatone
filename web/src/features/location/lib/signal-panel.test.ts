@@ -77,10 +77,19 @@ describe('signal-panel', () => {
 			signal({ id: 'compass', status: 'ok', confidence: 0.1 }),
 		])
 
-		expect(groups.map(group => group.section)).toEqual([
+		expect(groups.map(group => group.key)).toEqual([
 			'coordinates',
 			'priors',
 			'metadata',
 		])
+	})
+
+	it('uses a denied group key for blocked signals', () => {
+		const groups = groupSignalsBySection([
+			signal({ id: 'gps', status: 'denied', confidence: 0 }),
+			signal({ id: 'timezone', status: 'ok', confidence: 0.4 }),
+		])
+
+		expect(groups.map(group => group.key)).toEqual(['priors', 'denied'])
 	})
 })

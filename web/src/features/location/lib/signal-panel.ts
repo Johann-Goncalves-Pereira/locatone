@@ -6,6 +6,8 @@ import type {
 
 export type ProbeSection = 'coordinates' | 'priors' | 'conflicts' | 'metadata'
 
+export type PanelGroupKey = ProbeSection | 'denied'
+
 const PROBE_SECTION: Readonly<Record<ProbeId, ProbeSection>> = {
 	gps: 'coordinates',
 	network_geo: 'coordinates',
@@ -45,6 +47,37 @@ export const SECTION_LABELS: Readonly<Record<ProbeSection, string>> = {
 	priors: 'Priors regionais',
 	conflicts: 'Conflitos',
 	metadata: 'Metadados',
+}
+
+export const PANEL_GROUP_LABELS: Readonly<Record<PanelGroupKey, string>> = {
+	coordinates: 'Coordenadas',
+	priors: 'Priors regionais',
+	conflicts: 'Conflitos',
+	metadata: 'Metadados',
+	denied: 'Negados',
+}
+
+export const DEFAULT_OPEN_PANEL_GROUPS: readonly PanelGroupKey[] = [
+	'coordinates',
+]
+
+export const COLLECT_ERROR_MESSAGE = 'Falha ao coletar sinais.'
+
+export function revealCtaLabel(input: {
+	readonly isCollecting: boolean
+	readonly isError: boolean
+	readonly hasStarted: boolean
+}): string {
+	if (input.isCollecting) {
+		return 'Coletando sinais…'
+	}
+	if (input.isError) {
+		return 'Tentar de novo'
+	}
+	if (input.hasStarted) {
+		return 'Coletar de novo'
+	}
+	return 'Revelar origem'
 }
 
 export const ALL_PROBE_IDS = [
@@ -115,11 +148,22 @@ export function agreementLabel(agreement: Agreement): string {
 export function agreementToneClass(agreement: Agreement): string {
 	switch (agreement) {
 		case 'aligned':
-			return 'text-[var(--loc-accent)]'
+			return 'text-[var(--loc-ok)]'
 		case 'conflicted':
-			return 'text-rose-400'
+			return 'text-[var(--loc-danger)]'
 		case 'sparse':
-			return 'text-amber-300'
+			return 'text-[var(--loc-warning)]'
+	}
+}
+
+export function agreementChipClass(agreement: Agreement): string {
+	switch (agreement) {
+		case 'aligned':
+			return 'border-[color-mix(in_oklab,var(--loc-ok)_40%,transparent)] bg-[color-mix(in_oklab,var(--loc-ok)_12%,transparent)] text-[var(--loc-ok)]'
+		case 'conflicted':
+			return 'border-[color-mix(in_oklab,var(--loc-danger)_40%,transparent)] bg-[color-mix(in_oklab,var(--loc-danger)_12%,transparent)] text-[var(--loc-danger)]'
+		case 'sparse':
+			return 'border-[color-mix(in_oklab,var(--loc-warning)_40%,transparent)] bg-[color-mix(in_oklab,var(--loc-warning)_12%,transparent)] text-[var(--loc-warning)]'
 	}
 }
 
@@ -149,6 +193,7 @@ export function sortSignalsForPanel(
 export function groupSignalsBySection(
 	signals: readonly LocationSignal[],
 ): readonly {
+	readonly key: PanelGroupKey
 	readonly section: ProbeSection
 	readonly signals: readonly LocationSignal[]
 }[] {
@@ -167,6 +212,7 @@ export function groupSignalsBySection(
 	}
 	const denied = ordered.filter(signal => signal.status === 'denied')
 	const groups: {
+		readonly key: PanelGroupKey
 		readonly section: ProbeSection
 		readonly signals: readonly LocationSignal[]
 	}[] = []
@@ -178,11 +224,11 @@ export function groupSignalsBySection(
 	] as const) {
 		const items = buckets[section]
 		if (items.length > 0) {
-			groups.push({ section, signals: items })
+			groups.push({ key: section, section, signals: items })
 		}
 	}
 	if (denied.length > 0) {
-		groups.push({ section: 'metadata', signals: denied })
+		groups.push({ key: 'denied', section: 'metadata', signals: denied })
 	}
 	return groups
 }

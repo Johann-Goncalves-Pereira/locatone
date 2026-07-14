@@ -12,6 +12,7 @@ import {
 	selectedSignalIdsAtom,
 } from '@features/location/atoms/location-ui.atom'
 import { fuseSignals } from '@features/location/lib/fuse-signals'
+import { COLLECT_ERROR_MESSAGE } from '@features/location/lib/signal-panel'
 
 export function useLocationForensics(panel: PanelState) {
 	const runId = useAtomValue(scanRunIdAtom)
@@ -47,7 +48,7 @@ export function useLocationForensics(panel: PanelState) {
 			query.error instanceof Error
 				? query.error.message
 				: query.isError
-					? 'Falha ao coletar sinais.'
+					? COLLECT_ERROR_MESSAGE
 					: undefined,
 		signals,
 		fused,

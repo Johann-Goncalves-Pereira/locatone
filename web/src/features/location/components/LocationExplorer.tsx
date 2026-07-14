@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 import type { PanelState } from '@features/location/api/location.schema'
 import { ForensicsPanel } from '@features/location/components/ForensicsPanel'
 import { LocationHero } from '@features/location/components/LocationHero'
@@ -26,6 +28,19 @@ export function LocationExplorer({
 	} = useLocationForensics(panel)
 
 	const panelOpen = panel === 'open'
+	const wasCollectingRef = useRef(false)
+
+	useEffect(() => {
+		if (
+			wasCollectingRef.current &&
+			!isCollecting &&
+			!isError &&
+			signals.length > 0
+		) {
+			onPanelChange('open')
+		}
+		wasCollectingRef.current = isCollecting
+	}, [isCollecting, isError, onPanelChange, signals.length])
 
 	return (
 		<div className='flex min-h-dvh w-full flex-col overflow-hidden bg-[var(--loc-bg)]'>
@@ -44,13 +59,18 @@ export function LocationExplorer({
 					isCollecting={isCollecting}
 					isError={isError}
 					errorMessage={errorMessage}
+					panelOpen={panelOpen}
 					onReveal={revealOrigin}
+					onOpenPanel={() => {
+						onPanelChange('open')
+					}}
 					fusedSummary={fused?.summary}
 				/>
 			</div>
 			<ForensicsPanel
 				open={panelOpen}
 				isCollecting={isCollecting}
+				hasStarted={hasStarted}
 				isError={isError}
 				errorMessage={errorMessage}
 				signals={signals}

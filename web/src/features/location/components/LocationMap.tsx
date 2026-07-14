@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
 import type { LatLngExpression } from 'leaflet'
 import L from 'leaflet'
@@ -16,7 +16,10 @@ import {
 	shortProbeLabel,
 } from '@features/location/lib/probe-colors'
 import {
+	CAMERA_ACCURACY_MAX_METERS,
 	type SignalMapPoint,
+	cameraFocusLatLngs,
+	shouldDrawAccuracyCircle,
 	signalMapPoints,
 } from '@features/location/lib/signal-map-points'
 
@@ -32,11 +35,15 @@ interface LocationMapProps {
 const DEFAULT_CENTER: LatLngExpression = [-14.235, -51.925]
 const DEFAULT_ZOOM = 3
 
-function createProbeIcon(color: string, selected: boolean): L.DivIcon {
-	const size = selected ? 16 : 12
+function createProbeIcon(
+	color: string,
+	selected: boolean,
+	approximate: boolean,
+): L.DivIcon {
+	const size = selected ? 16 : approximate ? 10 : 12
 	return L.divIcon({
 		className: 'locatone-marker-probe',
-		html: `<span class="locatone-pin locatone-pin--probe${selected ? ' locatone-pin--selected' : ''}" style="--pin-color:${color};width:${String(size)}px;height:${String(size)}px"></span>`,
+		html: `<span class="locatone-pin locatone-pin--probe${selected ? ' locatone-pin--selected' : ''}${approximate && !selected ? ' locatone-pin--approx' : ''}" style="--pin-color:${color};width:${String(size)}px;height:${String(size)}px"></span>`,
 		iconSize: [size, size],
 		iconAnchor: [size / 2, size / 2],
 	})
@@ -48,6 +55,20 @@ const fusedIcon = L.divIcon({
 	iconSize: [18, 18],
 	iconAnchor: [9, 9],
 })
+
+function flyZoomForPoint(point: SignalMapPoint): number {
+	const accuracy = point.accuracyMeters
+	if (point.approximate) {
+		return 4
+	}
+	if (accuracy !== undefined && accuracy > CAMERA_ACCURACY_MAX_METERS) {
+		return 4
+	}
+	if (accuracy !== undefined && accuracy < 5_000) {
+		return 13
+	}
+	return 8
+}
 
 function MapEffects({
 	fused,
@@ -74,11 +95,9 @@ function MapEffects({
 		if (selectedPoints.length === 1) {
 			const only = selectedPoints[0]
 			if (only !== undefined) {
-				map.flyTo(
-					[only.lat, only.lng],
-					only.approximate ? 4 : Math.max(map.getZoom(), 8),
-					{ duration: 0.8 },
-				)
+				map.flyTo([only.lat, only.lng], flyZoomForPoint(only), {
+					duration: 0.8,
+				})
 			}
 			return
 		}
@@ -96,35 +115,24 @@ function MapEffects({
 			return
 		}
 
-		const latLngs: L.LatLngExpression[] = points.map(point => [
-			point.lat,
-			point.lng,
-		])
-		if (fused?.lat !== undefined && fused.lng !== undefined) {
-			latLngs.push([fused.lat, fused.lng])
-		}
-
-		if (latLngs.length === 0) {
+		const focus = cameraFocusLatLngs(points, fused, selectedIds)
+		if (focus.length === 0) {
 			return
 		}
 
-		if (latLngs.length === 1) {
-			const only = latLngs[0]
+		if (focus.length === 1) {
+			const only = focus[0]
 			if (only !== undefined) {
-				map.flyTo(
-					only,
+				const zoom =
 					fused?.accuracyMeters !== undefined && fused.accuracyMeters < 5_000
 						? 13
-						: 5,
-					{
-						duration: 1.1,
-					},
-				)
+						: 5
+				map.flyTo([only.lat, only.lng], zoom, { duration: 1.1 })
 			}
 			return
 		}
 
-		const bounds = L.latLngBounds(latLngs)
+		const bounds = L.latLngBounds(focus.map(point => [point.lat, point.lng]))
 		map.fitBounds(bounds, {
 			padding: [48, 48],
 			maxZoom: 12,
@@ -143,6 +151,12 @@ function MapLegend({
 	readonly points: readonly SignalMapPoint[]
 	readonly panelOpen: boolean
 }) {
+	const [expanded, setExpanded] = useState(!panelOpen)
+
+	useEffect(() => {
+		setExpanded(!panelOpen)
+	}, [panelOpen])
+
 	if (points.length === 0) {
 		return null
 	}
@@ -158,37 +172,53 @@ function MapLegend({
 	}
 
 	return (
-		<div
-			className={`pointer-events-auto absolute bottom-3 left-3 z-[400] max-w-[min(calc(100%-1.5rem),22rem)] rounded-lg border border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_88%,transparent)] px-2.5 py-2 backdrop-blur-md ${
-				panelOpen ? 'mb-1 max-h-24 overflow-y-auto sm:max-h-none' : ''
-			}`}
-		>
-			<p className='mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--loc-muted)] uppercase'>
-				Métodos no mapa
-			</p>
-			<ul className='flex flex-wrap gap-x-3 gap-y-1.5'>
-				{entries.map(entry => (
-					<li
-						key={entry.id}
-						className='flex items-center gap-1.5 text-[11px] text-[var(--loc-ink)]'
-					>
-						<span
-							className='size-2.5 shrink-0 rounded-full'
-							style={{ backgroundColor: entry.color }}
-							aria-hidden
-						/>
-						{shortProbeLabel(entry.id)}
-					</li>
-				))}
-				<li className='flex items-center gap-1.5 text-[11px] text-[var(--loc-ink)]'>
-					<span
-						className='size-2.5 shrink-0 rounded-full ring-2 ring-[var(--loc-ink)]/30'
-						style={{ backgroundColor: FUSED_COLOR }}
-						aria-hidden
-					/>
-					Fusão
-				</li>
-			</ul>
+		<div className='pointer-events-auto absolute bottom-3 left-3 z-[400] max-w-[min(calc(100%-1.5rem),22rem)]'>
+			{panelOpen ? (
+				<button
+					type='button'
+					onClick={() => {
+						setExpanded(current => !current)
+					}}
+					aria-expanded={expanded}
+					className='mb-1.5 rounded-lg border border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_88%,transparent)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--loc-accent)] backdrop-blur-md focus-visible:ring-2 focus-visible:ring-[var(--loc-accent)] focus-visible:outline-none'
+				>
+					{expanded ? 'Ocultar legenda' : 'Legenda'}
+				</button>
+			) : null}
+			{expanded || !panelOpen ? (
+				<div
+					className={`rounded-lg border border-[var(--loc-border)] bg-[color-mix(in_oklab,var(--loc-bg)_88%,transparent)] px-2.5 py-2 backdrop-blur-md ${
+						panelOpen ? 'max-h-24 overflow-y-auto sm:max-h-none' : ''
+					}`}
+				>
+					<p className='mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--loc-muted)] uppercase'>
+						Métodos no mapa
+					</p>
+					<ul className='flex flex-wrap gap-x-3 gap-y-1.5'>
+						{entries.map(entry => (
+							<li
+								key={entry.id}
+								className='flex items-center gap-1.5 text-[11px] text-[var(--loc-ink)]'
+							>
+								<span
+									className='size-2.5 shrink-0 rounded-full'
+									style={{ backgroundColor: entry.color }}
+									aria-hidden
+								/>
+								{shortProbeLabel(entry.id)}
+							</li>
+						))}
+						<li className='flex items-center gap-1.5 text-[11px] text-[var(--loc-ink)]'>
+							<span
+								className='size-2.5 shrink-0 rounded-full ring-2 ring-[var(--loc-ink)]/30'
+								style={{ backgroundColor: FUSED_COLOR }}
+								aria-hidden
+							/>
+							Fusão
+						</li>
+					</ul>
+				</div>
+			) : null}
 		</div>
 	)
 }
@@ -240,18 +270,19 @@ export function LocationMap({
 				{points.map(point => {
 					const color = probeColor(point.signal.id)
 					const selectedPoint = selectedSignalIds.includes(point.signal.id)
+					const drawCircle = shouldDrawAccuracyCircle(point, selectedPoint)
 					return (
 						<Fragment key={point.signal.id}>
-							{point.accuracyMeters !== undefined ? (
+							{drawCircle && point.accuracyMeters !== undefined ? (
 								<Circle
 									center={[point.lat, point.lng]}
 									radius={point.accuracyMeters}
 									pathOptions={{
 										color,
 										fillColor: color,
-										fillOpacity: selectedPoint ? 0.14 : 0.06,
+										fillOpacity: selectedPoint ? 0.06 : 0.03,
 										weight: selectedPoint ? 2 : 1,
-										opacity: selectedPoint ? 0.9 : 0.45,
+										opacity: selectedPoint ? 0.85 : 0.4,
 									}}
 									eventHandlers={{
 										click: () => {
@@ -262,8 +293,8 @@ export function LocationMap({
 							) : null}
 							<Marker
 								position={[point.lat, point.lng]}
-								icon={createProbeIcon(color, selectedPoint)}
-								opacity={selectedPoint ? 1 : 0.75}
+								icon={createProbeIcon(color, selectedPoint, point.approximate)}
+								opacity={selectedPoint ? 1 : point.approximate ? 0.55 : 0.75}
 								eventHandlers={{
 									click: () => {
 										onToggleSignal(point.signal.id)
@@ -283,8 +314,9 @@ export function LocationMap({
 								pathOptions={{
 									color: FUSED_COLOR,
 									fillColor: FUSED_COLOR,
-									fillOpacity: 0.08,
+									fillOpacity: 0.06,
 									weight: 1.5,
+									opacity: 0.75,
 								}}
 							/>
 						) : null}

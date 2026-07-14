@@ -1,5 +1,15 @@
-import type { LocationSignal } from '@features/location/api/location.schema'
+import type {
+	FusedLocation,
+	LocationSignal,
+	ProbeId,
+} from '@features/location/api/location.schema'
 import { countryCentroid } from '@features/location/lib/region-priors'
+
+/** Circles larger than this are omitted unless the probe is selected. */
+export const CIRCLE_DRAW_MAX_METERS = 250_000
+
+/** Points above this accuracy are excluded from default camera fit. */
+export const CAMERA_ACCURACY_MAX_METERS = 500_000
 
 export interface SignalMapPoint {
 	readonly signal: LocationSignal
@@ -7,6 +17,11 @@ export interface SignalMapPoint {
 	readonly lng: number
 	readonly approximate: boolean
 	readonly accuracyMeters?: number
+}
+
+export interface MapLatLng {
+	readonly lat: number
+	readonly lng: number
 }
 
 function firstCentroid(
@@ -64,4 +79,72 @@ export function signalMapPoints(
 	}
 
 	return points
+}
+
+export function shouldDrawAccuracyCircle(
+	point: SignalMapPoint,
+	selected: boolean,
+): boolean {
+	if (point.accuracyMeters === undefined) {
+		return false
+	}
+	if (selected) {
+		return true
+	}
+	return point.accuracyMeters <= CIRCLE_DRAW_MAX_METERS
+}
+
+export function isPriorityCameraPoint(point: SignalMapPoint): boolean {
+	if (point.approximate) {
+		return false
+	}
+	if (point.accuracyMeters === undefined) {
+		return true
+	}
+	return point.accuracyMeters <= CAMERA_ACCURACY_MAX_METERS
+}
+
+export function cameraFocusLatLngs(
+	points: readonly SignalMapPoint[],
+	fused: FusedLocation | undefined,
+	selectedIds: readonly ProbeId[],
+): readonly MapLatLng[] {
+	const selectedPoints = points.filter(point =>
+		selectedIds.includes(point.signal.id),
+	)
+
+	if (selectedPoints.length > 0) {
+		return selectedPoints.map(point => ({ lat: point.lat, lng: point.lng }))
+	}
+
+	const priority: MapLatLng[] = []
+	for (const point of points) {
+		if (isPriorityCameraPoint(point)) {
+			priority.push({ lat: point.lat, lng: point.lng })
+		}
+	}
+
+	if (fused?.lat !== undefined && fused.lng !== undefined) {
+		priority.push({ lat: fused.lat, lng: fused.lng })
+	}
+
+	if (priority.length > 0) {
+		return priority
+	}
+
+	const fallback: MapLatLng[] = points.map(point => ({
+		lat: point.lat,
+		lng: point.lng,
+	}))
+	if (fused?.lat !== undefined && fused.lng !== undefined) {
+		fallback.push({ lat: fused.lat, lng: fused.lng })
+	}
+	return fallback
+}
+
+export function formatAccuracyMeters(meters: number): string {
+	if (meters >= 1000) {
+		return `±${Math.round(meters / 1000)} km`
+	}
+	return `±${Math.round(meters)} m`
 }
